@@ -1,14 +1,35 @@
 import React from "react";
-import Button, { type ButtonProps } from "@mui/material/Button";
+import {
+  Button as MuiButton,
+  type ButtonProps as MuiButtonProps,
+  CircularProgress,
+} from "@mui/material";
 
-interface CButtonProps extends ButtonProps {
-  label: string;
+// MUI'ın ButtonProps tipini miras alıyoruz
+interface CButtonProps extends MuiButtonProps {
+  isLoading?: boolean;
 }
 
-export const CButton: React.FC<CButtonProps> = ({ label, ...props }) => {
+export const CButton: React.FC<CButtonProps> = ({
+  children,
+  isLoading = false,
+  disabled,
+  ...props
+}) => {
   return (
-    <Button variant="contained" {...props}>
-      {label}
-    </Button>
+    <MuiButton
+      {...props}
+      disabled={disabled || isLoading}
+      // MUI'ın hazır ripple efekti, stilleri ve özellikleri aynen çalışır
+      startIcon={
+        isLoading ? (
+          <CircularProgress size={20} color="inherit" />
+        ) : (
+          props.startIcon
+        )
+      }
+    >
+      {isLoading ? "Lütfen Bekleyin..." : children}
+    </MuiButton>
   );
 };
