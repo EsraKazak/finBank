@@ -1,23 +1,30 @@
 import React, { useState } from "react";
-import { loginUser, type LoginResponse } from "../services/api";
+import { useNavigate } from "react-router-dom";
+import { loginUser } from "../services/api";
 import { LoginForm } from "../features/auth/LoginForm";
-import { UserCard } from "../features/transfer/UserCard";
+import { useAuth } from "../hooks/useAuth";
 
 export const LoginPage: React.FC = () => {
-  //kullanıcın giriş yapıp yapmadığını kontrol etmek için state
-  const [loggedInUser, setLoggedInUser] = useState<
-    LoginResponse["user"] | null
-  >(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   const handleLogin = async (username: string, pass: string) => {
     setError(null);
     setLoading(true);
     try {
+      // 1. API'den veriyi al
       const data = await loginUser(username, pass);
-      localStorage.setItem("authToken", data.token);
-      setLoggedInUser(data.user);
+
+      // 2. AuthContext'teki login metodunu çalıştır (state ve localStorage'ı o günceller)
+      // data içinde { accessToken, user, (varsa refreshToken) } döndüğünden emin ol
+      login(data);
+
+      // 3. Kullanıcıyı Dashboard sayfasına yönlendir
+      // replace: true sayesinde kullanıcı tarayıcının "Geri" butonuna bastığında tekrar login sayfasına dönmez
+      navigate("/dashboard", { replace: true });
     } catch (err: any) {
       setError(
         err.response?.data?.message ||
@@ -26,11 +33,6 @@ export const LoginPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("authToken");
-    setLoggedInUser(null);
   };
 
   return (
@@ -48,15 +50,11 @@ export const LoginPage: React.FC = () => {
     >
       <h2 style={{ textAlign: "center", color: "#1976d2" }}>FinBank</h2>
 
-      {loggedInUser ? (
-        <UserCard user={loggedInUser} onLogout={handleLogout} />
-      ) : (
-        <LoginForm
-          onSubmit={handleLogin}
-          isLoading={loading}
-          errorMessage={error}
-        />
-      )}
+      <LoginForm
+        onSubmit={handleLogin}
+        isLoading={loading}
+        errorMessage={error}
+      />
     </div>
   );
 };

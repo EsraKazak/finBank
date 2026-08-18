@@ -4,7 +4,9 @@ export interface IUser {
   name: string;
   surname: string;
   username: string;
+  email: string;
   password?: string;
+  refreshToken?: string;
 }
 
 export interface ILoginRequest {
@@ -14,6 +16,7 @@ export interface ILoginRequest {
 
 //burada omit kullanarak password alanını çıkardık çünkü kullanıcıya şifreyi geri göndermemeliyiz.
 export interface IAuthResponse {
-  token: string;
+  accessToken: string;
   user: Omit<IUser, "password">;
+  refreshToken?: string;
 }
