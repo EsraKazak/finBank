@@ -3,12 +3,15 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const redis = new Redis({
-  host: process.env.REDIS_HOST || "127.0.0.1",
-  port: Number(process.env.REDIS_PORT) || 6379,
-});
+//  Render'daki REDIS_URL varsa doğrudan URL ile bağlanır
+//  Yoksa yereldeki REDIS_HOST / REDIS_PORT veya localhost'a döner
+const redis = process.env.REDIS_URL
+  ? new Redis(process.env.REDIS_URL)
+  : new Redis({
+      host: process.env.REDIS_HOST || "127.0.0.1",
+      port: Number(process.env.REDIS_PORT) || 6379,
+    });
 
-// bağlantı kurulduğunda ve hata oluştuğunda loglama yapmak için event listener ekliyoruz
 redis.on("connect", () => console.log("Redis veritabanı bağlantısı başarılı."));
 redis.on("error", (err: Error) => console.error("Redis bağlantı hatası:", err));
 
