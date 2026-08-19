@@ -1,3 +1,4 @@
+// src/context/AuthContext.tsx
 import React, { createContext, useState, useEffect } from "react";
 import {
   type User,
@@ -19,65 +20,94 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // 1. GİRİŞ YAPMA (API isteği + State + LocalStorage)
   const login = async (username: string, pass: string): Promise<void> => {
-    // API isteğini doğrudan context içinde yapıyoruz
     const response = await api.post<AuthResponse>("/auth/login", {
       username,
       password: pass,
     });
-    console.log("Backend Giriş Yanıtı:", response.data); // Gelen veriyi gör
 
-    const data = response.data;
+    console.log("Backend Giriş Yanıtı:", response.data);
+
+    const data = response.data as any;
+
+    // Backend yanıtındaki kullanıcı nesnesini yakala
+    const resolvedUser: User = data.user ||
+      data.data?.user ||
+      (data.id ? (data as User) : null) || {
+        id: "1",
+        username,
+        name: username,
+        surname: "",
+      };
 
     // Token ve kullanıcı verilerini sakla
-    localStorage.setItem("accessToken", data.accessToken);
+    if (data.accessToken) {
+      localStorage.setItem("accessToken", data.accessToken);
+      setAccessToken(data.accessToken);
+    }
     if (data.refreshToken) {
       localStorage.setItem("refreshToken", data.refreshToken);
     }
-    localStorage.setItem("user", JSON.stringify(data.user));
+
+    localStorage.setItem("user", JSON.stringify(resolvedUser));
 
     // State'i güncelle
-    setAccessToken(data.accessToken);
-    setUser(data.user);
+    setUser(resolvedUser);
   };
 
-  // 2. ÇIKIŞ YAPMA (Backend'i bilgilendir + LocalStorage ve State temizliği)
+  // 2. ÇIKIŞ YAPMA (Backend bildirimi + LocalStorage ve State temizliği)
   const logout = async () => {
     try {
       const refreshToken = localStorage.getItem("refreshToken");
       if (refreshToken) {
-        // Backend'e token'ı geçersiz kılması için bildirim atıyoruz (varsa)
         await api.post("/auth/logout", { refreshToken });
       }
     } catch (error) {
       console.warn("Backend çıkış isteğinde hata:", error);
     } finally {
-      // Hata alsa bile istemcideki tüm oturumu temizle
       localStorage.removeItem("accessToken");
       localStorage.removeItem("refreshToken");
+      localStorage.removeItem("user");
       setUser(null);
       setAccessToken(null);
     }
   };
 
+  // 3. OTURUM BAŞLATMA (Sayfa F5 yapıldığında)
   useEffect(() => {
     const initializeAuth = async () => {
       const storedToken = localStorage.getItem("accessToken");
       const storedRefreshToken = localStorage.getItem("refreshToken");
+      const storedUser = localStorage.getItem("user");
 
       if (!storedToken && !storedRefreshToken) {
         setIsLoading(false);
         return;
       }
 
+      // LocalStorage'da kayıtlı kullanıcı varsa hemen yükle (hızlı açılış)
+      if (storedUser) {
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch {
+          // JSON parse hatası olursa yok say
+        }
+      }
+
+      if (storedToken) {
+        setAccessToken(storedToken);
+      }
+
+      // Backend üzerinden token geçerliliğini doğrula
       try {
         const response = await api.get<{ user: User }>("/auth/me");
-        setUser(response.data.user);
-        setAccessToken(localStorage.getItem("accessToken"));
+        const currentUser = response.data.user || (response.data as any);
+        setUser(currentUser);
+        localStorage.setItem("user", JSON.stringify(currentUser));
       } catch (error) {
-        console.warn("Oturum doğrulanamadı, çıkış yapılıyor.");
-        // Sessiz temizlik
+        console.warn("Oturum doğrulanamadı, yerel veriler temizleniyor.");
         localStorage.removeItem("accessToken");
         localStorage.removeItem("refreshToken");
+        localStorage.removeItem("user");
         setUser(null);
         setAccessToken(null);
       } finally {
