@@ -2,8 +2,12 @@
 
 import axios from "axios";
 
+// Canlı ortamda (Render) VITE_API_BASE_URL kullanılır, yerelde localhost'a döner
+const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
+
 const api = axios.create({
-  baseURL: "http://localhost:5000/api",
+  baseURL: BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },
@@ -57,8 +61,9 @@ api.interceptors.response.use(
           throw new Error("Refresh token bulunamadı.");
         }
 
+        // Burada da sabit localhost yerine dinamik BASE_URL kullanıyoruz
         const response = await axios.post<{ accessToken: string }>(
-          "http://localhost:5000/api/auth/refresh",
+          `${BASE_URL}/auth/refresh`,
           { refreshToken },
         );
 
