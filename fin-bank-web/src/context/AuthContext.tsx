@@ -17,23 +17,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const logout = () => {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("user");
-    setUser(null);
-    setAccessToken(null);
-  };
+  // 1. GİRİŞ YAPMA (API isteği + State + LocalStorage)
+  const login = async (username: string, pass: string): Promise<void> => {
+    // API isteğini doğrudan context içinde yapıyoruz
+    const response = await api.post<AuthResponse>("/auth/login", {
+      username,
+      password: pass,
+    });
+    console.log("Backend Giriş Yanıtı:", response.data); // Gelen veriyi gör
 
-  const login = (data: AuthResponse) => {
+    const data = response.data;
+
+    // Token ve kullanıcı verilerini sakla
     localStorage.setItem("accessToken", data.accessToken);
     if (data.refreshToken) {
       localStorage.setItem("refreshToken", data.refreshToken);
     }
     localStorage.setItem("user", JSON.stringify(data.user));
 
+    // State'i güncelle
     setAccessToken(data.accessToken);
     setUser(data.user);
+  };
+
+  // 2. ÇIKIŞ YAPMA (Backend'i bilgilendir + LocalStorage ve State temizliği)
+  const logout = async () => {
+    try {
+      const refreshToken = localStorage.getItem("refreshToken");
+      if (refreshToken) {
+        // Backend'e token'ı geçersiz kılması için bildirim atıyoruz (varsa)
+        await api.post("/auth/logout", { refreshToken });
+      }
+    } catch (error) {
+      console.warn("Backend çıkış isteğinde hata:", error);
+    } finally {
+      // Hata alsa bile istemcideki tüm oturumu temizle
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      setUser(null);
+      setAccessToken(null);
+    }
   };
 
   useEffect(() => {
@@ -41,23 +64,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       const storedToken = localStorage.getItem("accessToken");
       const storedRefreshToken = localStorage.getItem("refreshToken");
 
-      // Hafızada hiçbir token yoksa direkt kontrolü bitir
       if (!storedToken && !storedRefreshToken) {
         setIsLoading(false);
         return;
       }
 
       try {
-        // Sunucuya gerçek bir doğrulama isteği atıyoruz.
-        // Access Token süresi bitmişse api interceptor'ı refresh token ile sessizce yenileyecektir.
         const response = await api.get<{ user: User }>("/auth/me");
-
         setUser(response.data.user);
         setAccessToken(localStorage.getItem("accessToken"));
       } catch (error) {
-        // Hem access token hem refresh token geçersizse oturumu tamamen kapat
         console.warn("Oturum doğrulanamadı, çıkış yapılıyor.");
-        logout();
+        // Sessiz temizlik
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
+        setUser(null);
+        setAccessToken(null);
       } finally {
         setIsLoading(false);
       }

@@ -1,6 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { loginUser } from "../services/api";
+import {
+  Container,
+  Paper,
+  Typography,
+  Box,
+  Snackbar,
+  Alert,
+} from "@mui/material";
+import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import { LoginForm } from "../features/auth/LoginForm";
 import { useAuth } from "../hooks/useAuth";
 
@@ -8,6 +16,7 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // AuthContext'ten login metodunu alıyoruz
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -15,15 +24,10 @@ export const LoginPage: React.FC = () => {
     setError(null);
     setLoading(true);
     try {
-      // 1. API'den veriyi al
-      const data = await loginUser(username, pass);
+      // 1. AuthContext login fonksiyonunu çağır (API + State + localStorage güncellenir)
+      await login(username, pass);
 
-      // 2. AuthContext'teki login metodunu çalıştır (state ve localStorage'ı o günceller)
-      // data içinde { accessToken, user, (varsa refreshToken) } döndüğünden emin ol
-      login(data);
-
-      // 3. Kullanıcıyı Dashboard sayfasına yönlendir
-      // replace: true sayesinde kullanıcı tarayıcının "Geri" butonuna bastığında tekrar login sayfasına dönmez
+      // 2. Başarılı girişte Dashboard sayfasına yönlendir
       navigate("/dashboard", { replace: true });
     } catch (err: any) {
       setError(
@@ -35,26 +39,68 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  return (
-    <div
-      style={{
-        maxWidth: "400px",
-        margin: "80px auto",
-        padding: "30px",
-        borderRadius: "12px",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
-        backgroundColor: "#ffffff",
-        color: "#333333",
-        fontFamily: "sans-serif",
-      }}
-    >
-      <h2 style={{ textAlign: "center", color: "#1976d2" }}>FinBank</h2>
+  const handleCloseSnackbar = (
+    _event?: React.SyntheticEvent | Event,
+    reason?: string,
+  ) => {
+    if (reason === "clickaway") {
+      return;
+    }
+    setError(null);
+  };
 
-      <LoginForm
-        onSubmit={handleLogin}
-        isLoading={loading}
-        errorMessage={error}
-      />
-    </div>
+  return (
+    <Container maxWidth="xs" sx={{ mt: 10, mb: 4 }}>
+      <Paper
+        elevation={4}
+        sx={{
+          p: 4,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          borderRadius: 3,
+        }}
+      >
+        {/* Logo ve Başlık */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            color: "primary.main",
+            mb: 2,
+          }}
+        >
+          <LockOutlinedIcon fontSize="large" />
+          <Typography variant="h4" component="h1" sx={{ fontWeight: "bold" }}>
+            FinBank
+          </Typography>
+        </Box>
+
+        {/* Giriş Formu */}
+        <LoginForm
+          onSubmit={handleLogin}
+          isLoading={loading}
+          errorMessage={error}
+        />
+      </Paper>
+
+      {/* Sağ Üstte Açılan MUI Snackbar (Toast) Bildirimi */}
+      <Snackbar
+        open={Boolean(error)}
+        autoHideDuration={5000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity="error"
+          variant="filled"
+          sx={{ width: "100%", boxShadow: 3 }}
+        >
+          {error}
+        </Alert>
+      </Snackbar>
+    </Container>
   );
 };

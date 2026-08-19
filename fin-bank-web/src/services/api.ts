@@ -1,14 +1,14 @@
+// src/services/api.ts
+
 import axios from "axios";
 
 const api = axios.create({
-  //Axios'un bir instance'ı oluşturuluyor, baseURL sabitleniyor. Böylece her istekte http://localhost:5000/api/... yazmak yerine sadece /auth/login gibi kısa yol yeterli oluyor.
   baseURL: "http://localhost:5000/api",
   headers: {
     "Content-Type": "application/json",
   },
 });
 
-// backendeki ıauthresponse de herhengi bir değişiklikde burayı da değiştirmem gerekir birebir benzeri bu
 export interface LoginResponse {
   accessToken: string;
   refreshToken?: string;
@@ -35,25 +35,28 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   (response) => {
-    // Yanıt başarılıysa (200, 201 vb.) doğrudan döndür
     return response;
   },
   async (error) => {
     const originalRequest = error.config;
 
-    // Eğer 401 hatası aldıysak ve bu isteği daha önce tekrar denememişsek (_retry)
+    // KRİTİK NOKTA: İstek login isteğiyse refresh token döngüsüne sokma ve sayfayı yenileme!
+    // Hatayı doğrudan LoginPage'deki catch bloğuna ilet.
+    if (originalRequest?.url?.includes("/auth/login")) {
+      return Promise.reject(error);
+    }
+
+    // Login dışındaki korumalı isteklerde 401 alındıysa token yenilemeyi dene
     if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true; // Sonsuz döngüye girmemesi için bayrak koyuyoruz
+      originalRequest._retry = true;
 
       try {
         const refreshToken = localStorage.getItem("refreshToken");
 
-        // Refresh token yoksa doğrudan oturumu sonlandır
         if (!refreshToken) {
           throw new Error("Refresh token bulunamadı.");
         }
 
-        // Yenileme isteği atarken döngüye girmemek için düz axios kullanıyoruz
         const response = await axios.post<{ accessToken: string }>(
           "http://localhost:5000/api/auth/refresh",
           { refreshToken },
@@ -61,22 +64,18 @@ api.interceptors.response.use(
 
         const { accessToken } = response.data;
 
-        // Yeni Access Token'ı hafızaya yaz
         localStorage.setItem("accessToken", accessToken);
-
-        // Yarım kalan orijinal isteğin başlığını yeni token ile güncelle
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
 
-        // Orijinal isteği tekrar çalıştır ve sonucunu dön
         return api(originalRequest);
       } catch (refreshError) {
-        // Refresh token da geçersiz veya süresi dolmuşsa tüm oturumu temizle
         localStorage.removeItem("accessToken");
         localStorage.removeItem("refreshToken");
-        localStorage.removeItem("user");
 
-        // Kullanıcıyı login sayfasına yönlendir
-        window.location.href = "/login";
+        // Sadece oturumu gerçekten düşmüş kullanıcıyı login'e at
+        if (window.location.pathname !== "/login") {
+          window.location.href = "/login";
+        }
         return Promise.reject(refreshError);
       }
     }
@@ -85,7 +84,6 @@ api.interceptors.response.use(
   },
 );
 
-//backenddeki apiye istek atıp bu tipte değer istiyoruz dediğimiz yer
 export const loginUser = async (
   username: string,
   password: string,

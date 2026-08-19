@@ -1,6 +1,5 @@
 import React, { useState } from "react";
-import { CInput } from "../../components/CInput";
-import { CButton } from "../../components/CButton";
+import { Box, TextField, Button, Alert, CircularProgress } from "@mui/material";
 
 interface LoginFormProps {
   onSubmit: (username: string, pass: string) => Promise<void>;
@@ -18,55 +17,66 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("1. Form submit tetiklendi:", { username, password });
     await onSubmit(username, password);
   };
 
   return (
-    <form
+    <Box
+      component="form"
       onSubmit={handleFormSubmit}
-      style={{
+      noValidate
+      sx={{
         display: "flex",
         flexDirection: "column",
-        gap: "16px",
-        marginTop: "20px",
-        textAlign: "left",
+        gap: 2,
+        mt: 2.5,
+        width: "100%",
       }}
     >
-      <CInput
+      <TextField
         label="Kullanıcı Adı"
-        type="text"
+        variant="outlined"
+        fullWidth
+        required
         placeholder="Örn: ahmet"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
-        required
+        disabled={isLoading}
+        autoComplete="username"
       />
 
-      <CInput
+      <TextField
         label="Şifre"
         type="password"
+        variant="outlined"
+        fullWidth
+        required
         placeholder="••••••"
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        required
+        disabled={isLoading}
+        autoComplete="current-password"
       />
 
       {errorMessage && (
-        <div
-          style={{
-            color: "#d32f2f",
-            fontSize: "14px",
-            backgroundColor: "#fde8e8",
-            padding: "8px",
-            borderRadius: "4px",
-          }}
-        >
+        <Alert severity="error" variant="filled">
           {errorMessage}
-        </div>
+        </Alert>
       )}
 
-      <CButton type="submit" isLoading={isLoading}>
+      <Button
+        type="submit"
+        variant="contained"
+        size="large"
+        fullWidth
+        disabled={isLoading}
+        startIcon={
+          isLoading ? <CircularProgress size={20} color="inherit" /> : null
+        }
+      >
         {isLoading ? "Giriş Yapılıyor..." : "Giriş Yap"}
-      </CButton>
-    </form>
+      </Button>
+    </Box>
   );
 };
