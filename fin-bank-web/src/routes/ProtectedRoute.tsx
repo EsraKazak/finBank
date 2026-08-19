@@ -1,3 +1,4 @@
+// src/routes/ProtectedRoute.tsx
 import { Navigate, Outlet } from "react-router-dom";
 import { Box, CircularProgress, Typography } from "@mui/material";
 import { useAuth } from "../hooks/useAuth";
@@ -5,7 +6,6 @@ import { useAuth } from "../hooks/useAuth";
 export const ProtectedRoute = () => {
   const { isAuthenticated, isLoading } = useAuth();
 
-  // login yapmışlar için kullanıyoruz
   if (isLoading) {
     return (
       <Box
@@ -26,9 +26,11 @@ export const ProtectedRoute = () => {
     );
   }
 
+  // Doğrulama bittiğinde oturum yoksa Login'e at:
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
+  // Oturum varsa sayfayı (Dashboard) göster:
   return <Outlet />;
 };

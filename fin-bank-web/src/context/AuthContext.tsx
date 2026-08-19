@@ -14,22 +14,34 @@ export const AuthContext = createContext<AuthContextType | undefined>(
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // 1. İLK RENDER ANINDA DOĞRUDAN LOCALSTORAGE'DAN OKU (Yarış durumunu önler)
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const savedUser = localStorage.getItem("user");
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
 
-  // 1. GİRİŞ YAPMA (API isteği + State + LocalStorage)
+  const [accessToken, setAccessToken] = useState<string | null>(() => {
+    return localStorage.getItem("accessToken");
+  });
+
+  // Token varsa doğrulama tamamlanana kadar isLoading true kalsın
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    return !!localStorage.getItem("accessToken");
+  });
+
+  // GİRİŞ YAPMA
   const login = async (username: string, pass: string): Promise<void> => {
     const response = await api.post<AuthResponse>("/auth/login", {
       username,
       password: pass,
     });
 
-    console.log("Backend Giriş Yanıtı:", response.data);
-
     const data = response.data as any;
 
-    // Backend yanıtındaki kullanıcı nesnesini yakala
     const resolvedUser: User = data.user ||
       data.data?.user ||
       (data.id ? (data as User) : null) || {
@@ -39,7 +51,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         surname: "",
       };
 
-    // Token ve kullanıcı verilerini sakla
     if (data.accessToken) {
       localStorage.setItem("accessToken", data.accessToken);
       setAccessToken(data.accessToken);
@@ -49,12 +60,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     localStorage.setItem("user", JSON.stringify(resolvedUser));
-
-    // State'i güncelle
     setUser(resolvedUser);
   };
 
-  // 2. ÇIKIŞ YAPMA (Backend bildirimi + LocalStorage ve State temizliği)
+  // ÇIKIŞ YAPMA
   const logout = async () => {
     try {
       const refreshToken = localStorage.getItem("refreshToken");
@@ -66,37 +75,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       localStorage.removeItem("accessToken");
       localStorage.removeItem("refreshToken");
+      localStorage.removeItem("user");
       setUser(null);
       setAccessToken(null);
     }
   };
 
-  // 3. OTURUM BAŞLATMA (Sayfa F5 yapıldığında)
+  // SAYFA YENİLENDİĞİNDE ARKA PLANDA TOKEN DOĞRULAMA
   useEffect(() => {
     const initializeAuth = async () => {
       const storedToken = localStorage.getItem("accessToken");
-      const storedRefreshToken = localStorage.getItem("refreshToken");
-      const storedUser = localStorage.getItem("user");
 
-      if (!storedToken && !storedRefreshToken) {
+      if (!storedToken) {
         setIsLoading(false);
         return;
       }
 
-      // LocalStorage'da kayıtlı kullanıcı varsa hemen yükle (hızlı açılış)
-      if (storedUser) {
-        try {
-          setUser(JSON.parse(storedUser));
-        } catch {
-          // JSON parse hatası olursa yok say
-        }
-      }
-
-      if (storedToken) {
-        setAccessToken(storedToken);
-      }
-
-      // Backend üzerinden token geçerliliğini doğrula
       try {
         const response = await api.get<{ user: User }>("/auth/me");
         const currentUser = response.data.user || (response.data as any);
@@ -106,7 +100,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         console.warn("Oturum doğrulanamadı, yerel veriler temizleniyor.");
         localStorage.removeItem("accessToken");
         localStorage.removeItem("refreshToken");
-
+        localStorage.removeItem("user");
         setUser(null);
         setAccessToken(null);
       } finally {

@@ -32,14 +32,14 @@ class AuthService {
 
     // 1. Kısa ömürlü Access Token (15 dakika)
     const accessToken = jwt.sign(payload, ACCESS_TOKEN_SECRET, {
-      expiresIn: "1m",
+      expiresIn: "15m",
     });
 
     // 2. Uzun ömürlü Refresh Token (7 gün) - içine username de koyuyoruz
     const refreshToken = jwt.sign(
       { id: user.id, username: user.username },
       REFRESH_TOKEN_SECRET,
-      { expiresIn: "1m" },
+      { expiresIn: "1d" },
     );
 
     // 3. Refresh Token'ı Redis'e kaydet (ioredis uyumlu: EX süresi)
