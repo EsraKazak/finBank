@@ -66,7 +66,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     } finally {
       localStorage.removeItem("accessToken");
       localStorage.removeItem("refreshToken");
-      localStorage.removeItem("user");
       setUser(null);
       setAccessToken(null);
     }
@@ -107,7 +106,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         console.warn("Oturum doğrulanamadı, yerel veriler temizleniyor.");
         localStorage.removeItem("accessToken");
         localStorage.removeItem("refreshToken");
-        localStorage.removeItem("user");
+
         setUser(null);
         setAccessToken(null);
       } finally {
