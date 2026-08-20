@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import authService from "../services/authService";
+import { MailService } from "../services/mailService";
 
 class AuthController {
   async register(req: Request, res: Response) {
@@ -9,7 +10,7 @@ class AuthController {
       if (!name || !surname || !username || !email || !password) {
         return res.status(400).json({
           message:
-            "Lütfen ad, soyad, kullanıcı adı , e-posta ve şifre alanlarını doldurun.",
+            "Lütfen ad, soyad, kullanıcı adı, e-posta ve şifre alanlarını doldurun.",
         });
       }
 
@@ -21,6 +22,10 @@ class AuthController {
         password,
         role: role || "BANKO_ASISTANI",
       });
+
+      // Kullanıcı oluştuktan sonra hoş geldin mailini gönderiyoruz:
+      const fullName = `${name} ${surname}`;
+      MailService.sendWelcomeEmail(email, fullName, username, password);
 
       return res.status(201).json({
         message: "Personel kaydı başarıyla oluşturuldu.",
