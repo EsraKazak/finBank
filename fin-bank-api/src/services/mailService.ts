@@ -1,39 +1,54 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export class MailService {
   static async sendPasswordResetEmail(
     toEmail: string,
     resetToken: string,
     name: string,
   ) {
-    // Kullanıcının tıklayacağı link (Frontend adresi)
-    const resetLink = `http://localhost:5173/reset-password?token=${resetToken}`;
+    const apiKey = process.env.RESEND_API_KEY;
+
+    if (!apiKey) {
+      console.error("HATA: RESEND_API_KEY ortam değişkeni bulunamadı!");
+      throw new Error("E-posta servisi yapılandırılmamış.");
+    }
+
+    // Nesneyi dosya başında değil, tam fonksiyon çalıştığı an üretiyoruz
+    const resend = new Resend(apiKey);
+
+    const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+    const resetLink = `${CLIENT_URL}/reset-password?token=${resetToken}`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 550px; margin: auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
+        <h2 style="color: #1976d2; margin-top: 0;">FinBank Personel Portalı</h2>
+        <p style="font-size: 15px; color: #333;">Merhaba <strong>${name}</strong>,</p>
+        <p style="font-size: 14px; color: #555; line-height: 1.5;">
+          Hesabınız için şifre sıfırlama talebinde bulundunuz. Yeni bir şifre belirlemek için aşağıdaki butona tıklayabilirsiniz:
+        </p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${resetLink}" style="background-color: #1976d2; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">
+            Şifremi Sıfırla
+          </a>
+        </div>
+        <p style="font-size: 12px; color: #888;">
+          Bu bağlantı <strong>15 dakika</strong> boyunca geçerlidir. Bu talebi siz yapmadıysanız lütfen bu e-postayı dikkate almayınız.
+        </p>
+      </div>
+    `;
 
     try {
-      await resend.emails.send({
-        from: "FinBank Destek <onboarding@resend.dev>", // Resend'in test gönderici adresi
-        to: toEmail, // Kendi kayıt olduğunuz Gmail adresiniz
+      const response = await resend.emails.send({
+        from: "FinBank Destek <onboarding@resend.dev>",
+        to: [toEmail],
         subject: "FinBank - Şifre Sıfırlama Bağlantısı",
-        html: `
-          <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
-            <h2 style="color: #1976d2;">FinBank Personel Portalı</h2>
-            <p>Merhaba <strong>${name}</strong>,</p>
-            <p>Şifrenizi sıfırlamak için aşağıdaki butona tıklayabilirsiniz:</p>
-            <p style="margin: 24px 0;">
-              <a href="${resetLink}" style="background-color: #1976d2; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">
-                Şifremi Sıfırla
-              </a>
-            </p>
-            <small style="color: #888;">Bu bağlantı 15 dakika geçerlidir.</small>
-          </div>
-        `,
+        html: htmlContent,
       });
-      console.log(`Sıfırlama maili ${toEmail} adresine başarıyla gönderildi.`);
-    } catch (error) {
-      console.error("Mail gönderim hatası:", error);
-      throw new Error("Mail gönderilemedi.");
+
+      return response;
+    } catch (error: any) {
+      console.error("Resend mail gönderme hatası:", error);
+      throw new Error("E-posta gönderimi başarısız oldu.");
     }
   }
 }
