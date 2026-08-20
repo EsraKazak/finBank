@@ -7,15 +7,32 @@ import cookieParser from "cookie-parser";
 dotenv.config();
 
 const app = express();
-app.use(cookieParser()); // cookşe okuması için koyduk
-app.use(express.json());
+
+// İzin verilen adreslerin listesi (Hem localhost hem de Render CLIENT_URL)
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  process.env.CLIENT_URL,
+].filter(Boolean) as string[];
 
 app.use(
   cors({
-    origin: "http://localhost:5173", // Frontend URL'iniz
+    origin: (origin, callback) => {
+      // Sunucular arası isteklerde veya listedeki origin'lerde izin ver
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error("CORS policy error: Origin not allowed."));
+      }
+    },
     credentials: true, // Cookie transferine izin verir
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 );
+
+app.use(cookieParser());
+app.use(express.json());
 
 app.use("/api/auth", authRoutes);
 
