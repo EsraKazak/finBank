@@ -49,6 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         username,
         name: username,
         surname: "",
+        role: "BANKO_ASISTANI",
       };
 
     if (data.accessToken) {
@@ -64,17 +65,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   // ÇIKIŞ YAPMA
+  // Çıkış işleminde sadece logout endpoint'ini çağırmak yeterlidir:
   const logout = async () => {
     try {
-      const refreshToken = localStorage.getItem("refreshToken");
-      if (refreshToken) {
-        await api.post("/auth/logout", { refreshToken });
-      }
+      await api.post("/auth/logout");
     } catch (error) {
       console.warn("Backend çıkış isteğinde hata:", error);
     } finally {
       localStorage.removeItem("accessToken");
-      localStorage.removeItem("refreshToken");
       localStorage.removeItem("user");
       setUser(null);
       setAccessToken(null);

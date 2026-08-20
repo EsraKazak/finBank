@@ -1,9 +1,13 @@
+export type UserRole = "BANKO_ASISTANI" | "ADMIN";
+
 // 1. Sistemdeki kullanıcı verisinin tipi
 export interface User {
   id: string;
   name: string;
+  surname: string;
+  username: string;
   email?: string;
-  role?: string; // Rolleri sonra ekleyeceğimiz için şimdiden opsiyonel olarak koyabilirsin
+  role: string; // Rolleri sonra ekleyeceğimiz için şimdiden opsiyonel olarak koyabilirsin
 }
 // Şifresiz güvenli kullanıcı tipi
 export type SafeUser = Omit<User, "password">;

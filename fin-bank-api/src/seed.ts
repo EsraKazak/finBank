@@ -61,6 +61,7 @@ async function seed() {
       surname: user.surname,
       username: user.username,
       password: hashedPassword,
+      role: "BANKO_ASISTANI",
     });
   }
 

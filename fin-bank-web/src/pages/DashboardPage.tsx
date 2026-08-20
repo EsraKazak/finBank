@@ -16,8 +16,21 @@ import { useAuth } from "../hooks/useAuth";
 export const DashboardPage = () => {
   const { user, logout } = useAuth();
 
-  const displayName = user?.name || user?.email?.split("@")[0] || "Kullanıcı";
-  const userRole = user?.role || "Kullanıcı";
+  // Ad - Soyad kontrolü, yoksa kullanıcı adı, o da yoksa varsayılan metin
+  const displayName =
+    `${user?.name || ""} ${user?.surname || ""}`.trim() ||
+    user?.username ||
+    user?.email?.split("@")[0] ||
+    "Kullanıcı";
+
+  // BANKO_ASISTANI rolünü arayüzde daha şık bir metin olarak göstermek için eşleme
+  const roleLabels: Record<string, string> = {
+    BANKO_ASISTANI: "Banko Asistanı",
+    ADMIN: "Yönetici",
+  };
+
+  const userRole =
+    (user?.role && roleLabels[user.role]) || user?.role || "Banka Personeli";
 
   return (
     <Container maxWidth="sm" sx={{ py: 6 }}>
@@ -51,7 +64,7 @@ export const DashboardPage = () => {
         />
 
         <CardContent sx={{ pt: 0, position: "relative" }}>
-          {/* Avatar Bölümü */}
+          {/* Avatar ve Rol Çipi Bölümü */}
           <Box
             sx={{
               display: "flex",
@@ -74,10 +87,12 @@ export const DashboardPage = () => {
             >
               {displayName.charAt(0).toUpperCase()}
             </Avatar>
+
+            {/* Sadece Rolü Gösteren Chip */}
             <Chip
               label={userRole}
               color="primary"
-              variant="outlined"
+              variant="filled"
               size="small"
               sx={{ fontWeight: 600 }}
             />
@@ -88,15 +103,14 @@ export const DashboardPage = () => {
             {displayName}
           </Typography>
 
-          {user?.email && (
+          {user?.username && (
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {user.email}
+              @{user.username}
             </Typography>
           )}
 
           <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-            Sisteme başarıyla giriş yapıldı. Buradan profil ayarlarını ve hesap
-            detaylarını yönetebilirsin.
+            Sisteme <strong>{userRole}</strong> olarak başarıyla giriş yapıldı.
           </Typography>
         </CardContent>
 

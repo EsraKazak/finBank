@@ -1,3 +1,4 @@
+export type UserRole = "BANKO_ASISTANI" | "ADMIN"; // Şimdilik sadece asistanı ve opsiyonel admini tutabiliriz
 //tip güvenliği için kullanıcı şifresi tipini IUser'den LoginResponse'dan çıkardık.
 export interface IUser {
   id: string;
@@ -7,6 +8,8 @@ export interface IUser {
   email: string;
   password?: string;
   refreshToken?: string;
+  role: UserRole;
+  createdAt?: Date;
 }
 
 export interface ILoginRequest {
