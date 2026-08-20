@@ -1,4 +1,4 @@
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
 export class MailService {
   static async sendPasswordResetEmail(
@@ -6,15 +6,13 @@ export class MailService {
     resetToken: string,
     name: string,
   ) {
-    const apiKey = process.env.RESEND_API_KEY;
-
-    if (!apiKey) {
-      console.error("HATA: RESEND_API_KEY ortam değişkeni bulunamadı!");
-      throw new Error("E-posta servisi yapılandırılmamış.");
-    }
-
-    // Nesneyi dosya başında değil, tam fonksiyon çalıştığı an üretiyoruz
-    const resend = new Resend(apiKey);
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
 
     const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
     const resetLink = `${CLIENT_URL}/reset-password?token=${resetToken}`;
@@ -38,16 +36,16 @@ export class MailService {
     `;
 
     try {
-      const response = await resend.emails.send({
-        from: "FinBank Destek <onboarding@resend.dev>",
-        to: [toEmail],
+      const info = await transporter.sendMail({
+        from: `"FinBank Destek" <${process.env.SMTP_USER}>`,
+        to: toEmail,
         subject: "FinBank - Şifre Sıfırlama Bağlantısı",
         html: htmlContent,
       });
 
-      return response;
+      return info;
     } catch (error: any) {
-      console.error("Resend mail gönderme hatası:", error);
+      console.error("Nodemailer mail gönderme hatası:", error);
       throw new Error("E-posta gönderimi başarısız oldu.");
     }
   }
