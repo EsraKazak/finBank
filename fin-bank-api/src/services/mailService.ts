@@ -1,9 +1,9 @@
 import nodemailer from "nodemailer";
 
 export class MailService {
-  private static readonly CLIENT_URL =
-    process.env.CLIENT_URL || "http://localhost:5173";
-
+  private static get clientUrl(): string {
+    return process.env.CLIENT_URL || "http://localhost:5173";
+  }
   // Transporter tek bir instance olarak tanımlandı
   private static readonly transporter = nodemailer.createTransport({
     service: "gmail",
@@ -62,7 +62,7 @@ export class MailService {
         </div>
 
         <div style="text-align: center; margin: 25px 0;">
-          <a href="${this.CLIENT_URL}/login" style="background-color: #1976d2; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">
+          <a href="${this.clientUrl}/login" style="background-color: #1976d2; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">
             Portala Giriş Yap
           </a>
         </div>
@@ -87,7 +87,7 @@ export class MailService {
     resetToken: string,
     name: string,
   ) {
-    const resetLink = `${this.CLIENT_URL}/reset-password?token=${resetToken}`;
+    const resetLink = `${this.clientUrl}/reset-password?token=${resetToken}`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 550px; margin: auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
