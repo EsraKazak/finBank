@@ -1,11 +1,9 @@
-import * as Brevo from "@getbrevo/brevo";
-
 export class MailService {
   private static get clientUrl(): string {
     return process.env.CLIENT_URL || "http://localhost:5173";
   }
 
-  // Ortak Brevo HTTP API gönderim fonksiyonu
+  // Doğrudan Brevo REST API üzerinden gönderim (Harici paket gerektirmez)
   private static async send({
     to,
     subject,
@@ -18,33 +16,38 @@ export class MailService {
     senderTitle?: string;
   }) {
     try {
-      const apiInstance = new Brevo.TransactionalEmailsApi();
-      apiInstance.setApiKey(
-        Brevo.TransactionalEmailsApiApiKeys.apiKey,
-        process.env.BREVO_API_KEY || "",
-      );
+      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "api-key": process.env.BREVO_API_KEY || "",
+        },
+        body: JSON.stringify({
+          sender: {
+            name: `FinBank ${senderTitle}`,
+            email: process.env.SMTP_USER || "esrakazak321@gmail.com",
+          },
+          to: [{ email: to }],
+          subject,
+          htmlContent: html,
+        }),
+      });
 
-      const sendSmtpEmail = new Brevo.SendSmtpEmail();
-      sendSmtpEmail.subject = subject;
-      sendSmtpEmail.htmlContent = html;
-      sendSmtpEmail.sender = {
-        name: `FinBank ${senderTitle}`,
-        // Brevo'da kayıtlı olan yönetici e-posta adresiniz:
-        email: process.env.SMTP_USER || "esrakazak321@gmail.com",
-      };
-      sendSmtpEmail.to = [{ email: to }];
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Brevo API Hata Yanıtı:", errorData);
+        throw new Error("E-posta servisi isteği reddetti.");
+      }
 
-      return await apiInstance.sendTransacEmail(sendSmtpEmail);
+      return await response.json();
     } catch (error: any) {
-      console.error(
-        `Brevo e-posta gönderim hatası (${subject}):`,
-        error.response?.body || error,
-      );
+      console.error(`E-posta gönderim hatası (${subject}):`, error);
       throw new Error("E-posta gönderimi başarısız oldu.");
     }
   }
 
-  // Hoş Geldin E-postası Metodu
+  // Hoş Geldin E-postası
   static async sendWelcomeEmail(
     toEmail: string,
     fullName: string,
