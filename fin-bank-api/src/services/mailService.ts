@@ -4,17 +4,17 @@ export class MailService {
   private static get clientUrl(): string {
     return process.env.CLIENT_URL || "http://localhost:5173";
   }
-  // Transporter tek bir instance olarak tanımlandı
-  private static readonly transporter = nodemailer.createTransport({
-    service: "gmail",
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
+
+  // Ortam değişkenlerini her çağrıda taze okuyan transporter metodu
+  private static getTransporter() {
+    return nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.SMTP_USER,
+        pass: process.env.SMTP_PASS,
+      },
+    });
+  }
 
   // Ortak mail gönderim fonksiyonu
   private static async send({
@@ -29,7 +29,8 @@ export class MailService {
     senderTitle?: string;
   }) {
     try {
-      return await this.transporter.sendMail({
+      const transporter = this.getTransporter();
+      return await transporter.sendMail({
         from: `"FinBank ${senderTitle}" <${process.env.SMTP_USER}>`,
         to,
         subject,
@@ -68,7 +69,7 @@ export class MailService {
         </div>
 
         <p style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 12px;">
-          Güvenliğiniz için ilk girişinizden sonra şifrenizi değiştirmenizi öneririz. Bu hesabı siz açmadıysanız lütfen sistem yöneticisi ile iletişime geçiniz.
+          Güvenliğiniz için ilk girişinizden sonra şifrenizi değiştirmenizi öneririz.
         </p>
       </div>
     `;
@@ -102,7 +103,7 @@ export class MailService {
           </a>
         </div>
         <p style="font-size: 12px; color: #888;">
-          Bu bağlantı <strong>15 dakika</strong> boyunca geçerlidir. Bu talebi siz yapmadıysanız lütfen bu e-postayı dikkate almayınız.
+          Bu bağlantı <strong>15 dakika</strong> boyunca geçerlidir.
         </p>
       </div>
     `;
@@ -115,14 +116,13 @@ export class MailService {
     });
   }
 
-  //kayıt olurken şifre maile gelir orada aktive olur
+  // Kayıt Davet E-postası
   static async sendInvitationEmail(
     toEmail: string,
     fullName: string,
     setupToken: string,
   ) {
-    const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
-    const setupLink = `${CLIENT_URL}/setup-password?token=${setupToken}`;
+    const setupLink = `${this.clientUrl}/setup-password?token=${setupToken}`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 550px; margin: auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
@@ -139,7 +139,7 @@ export class MailService {
         </div>
 
         <p style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 12px;">
-          Bu bağlantı <strong>24 saat</strong> boyunca geçerlidir. Bu talebi siz yapmadıysanız lütfen bu e-postayı dikkate almayınız.
+          Bu bağlantı <strong>24 saat</strong> boyunca geçerlidir.
         </p>
       </div>
     `;
