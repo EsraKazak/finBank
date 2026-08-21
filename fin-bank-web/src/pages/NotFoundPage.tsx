@@ -2,7 +2,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Box, Typography, Button, Paper } from "@mui/material";
-import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SearchOffIcon from "@mui/icons-material/SearchOff";
 
