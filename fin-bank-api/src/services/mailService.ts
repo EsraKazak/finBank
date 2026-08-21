@@ -1,22 +1,11 @@
-import nodemailer from "nodemailer";
+import * as Brevo from "@getbrevo/brevo";
 
 export class MailService {
   private static get clientUrl(): string {
     return process.env.CLIENT_URL || "http://localhost:5173";
   }
 
-  // Ortam değişkenlerini her çağrıda taze okuyan transporter metodu
-  private static getTransporter() {
-    return nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-  }
-
-  // Ortak mail gönderim fonksiyonu
+  // Ortak Brevo HTTP API gönderim fonksiyonu
   private static async send({
     to,
     subject,
@@ -29,15 +18,28 @@ export class MailService {
     senderTitle?: string;
   }) {
     try {
-      const transporter = this.getTransporter();
-      return await transporter.sendMail({
-        from: `"FinBank ${senderTitle}" <${process.env.SMTP_USER}>`,
-        to,
-        subject,
-        html,
-      });
+      const apiInstance = new Brevo.TransactionalEmailsApi();
+      apiInstance.setApiKey(
+        Brevo.TransactionalEmailsApiApiKeys.apiKey,
+        process.env.BREVO_API_KEY || "",
+      );
+
+      const sendSmtpEmail = new Brevo.SendSmtpEmail();
+      sendSmtpEmail.subject = subject;
+      sendSmtpEmail.htmlContent = html;
+      sendSmtpEmail.sender = {
+        name: `FinBank ${senderTitle}`,
+        // Brevo'da kayıtlı olan yönetici e-posta adresiniz:
+        email: process.env.SMTP_USER || "esrakazak321@gmail.com",
+      };
+      sendSmtpEmail.to = [{ email: to }];
+
+      return await apiInstance.sendTransacEmail(sendSmtpEmail);
     } catch (error: any) {
-      console.error(`E-posta gönderim hatası (${subject}):`, error);
+      console.error(
+        `Brevo e-posta gönderim hatası (${subject}):`,
+        error.response?.body || error,
+      );
       throw new Error("E-posta gönderimi başarısız oldu.");
     }
   }
