@@ -45,7 +45,7 @@ class AuthService {
       throw new Error("Bu e-posta adresiyle zaten aktif bir kullanıcı mevcut.");
     }
 
-    // 3. Kullanıcıyı oluştur (Rol beyaz listedeki rolden alınır, ilk şifre boş bırakılır)
+    // 3. Kullanıcıyı oluştur (İlk şifre boş, rol beyaz listeden)
     const newUser = await userRepository.createUser({
       name: userData.name,
       surname: userData.surname,
@@ -55,16 +55,39 @@ class AuthService {
       role: authorized.role,
     });
 
-    // 4. Redis'e 24 saat (86400 sn) geçerli tek kullanımlık aktivasyon token'ı kaydet
     const setupToken = crypto.randomBytes(32).toString("hex");
-    await redis.set(`reset_token:${setupToken}`, newUser.username, "EX", 86400);
 
-    // 5. E-posta ile davet & şifre belirleme bağlantısını gönder
-    const fullName = `${newUser.name} ${newUser.surname}`;
-    await MailService.sendInvitationEmail(newUser.email, fullName, setupToken);
+    try {
+      // 4. Redis'e 24 saat geçerli aktivasyon token'ı kaydet
+      await redis.set(
+        `reset_token:${setupToken}`,
+        newUser.username,
+        "EX",
+        86400,
+      );
 
-    // 6. Beyaz listedeki kaydın durumunu COMPLETED olarak güncelle
-    await userRepository.markAuthorizedAsCompleted(userData.email);
+      // 5. Davet e-postasını gönder
+      const fullName = `${newUser.name} ${newUser.surname}`;
+      await MailService.sendInvitationEmail(
+        newUser.email,
+        fullName,
+        setupToken,
+      );
+
+      // 6. Beyaz listedeki kaydın durumunu COMPLETED olarak güncelle
+      await userRepository.markAuthorizedAsCompleted(userData.email);
+    } catch (mailError: any) {
+      // ❌ E-posta gönderilemezse oluşturulan geçici kullanıcıyı ve token'ı temizle (Rollback)
+      await userRepository.deleteUser(newUser.id).catch(() => {});
+      await redis.del(`reset_token:${setupToken}`).catch(() => {});
+      console.error(
+        "Mail gönderim hatası nedeniyle kayıt geri alındı:",
+        mailError,
+      );
+      throw new Error(
+        "E-posta gönderimi başarısız oldu. Lütfen tekrar deneyiniz.",
+      );
+    }
 
     return {
       id: newUser.id,

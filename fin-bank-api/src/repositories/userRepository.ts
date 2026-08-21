@@ -40,6 +40,12 @@ class UserRepository {
       data: { status: "COMPLETED" },
     });
   }
+
+  async deleteUser(id: string) {
+    return await prisma.user.delete({
+      where: { id },
+    });
+  }
 }
 
 export default new UserRepository();
