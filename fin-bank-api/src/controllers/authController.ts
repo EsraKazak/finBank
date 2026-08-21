@@ -2,9 +2,36 @@ import { Request, Response } from "express";
 import authService from "../services/authService";
 
 class AuthController {
+  // Yönetici tarafından beyaz listeye personel tanımlama
+  async addAuthorizedPersonnel(req: Request, res: Response) {
+    try {
+      const { name, surname, email, role } = req.body;
+
+      if (!name || !surname || !email || !role) {
+        return res.status(400).json({
+          message: "Ad, soyad, e-posta ve rol alanları zorunludur.",
+        });
+      }
+
+      const entry = await authService.addAuthorizedPersonnel({
+        name,
+        surname,
+        email,
+        role,
+      });
+
+      return res.status(201).json({
+        message: "Personel başarıyla yetkili listesine eklendi.",
+        data: entry,
+      });
+    } catch (error: any) {
+      return res.status(400).json({ message: error.message });
+    }
+  }
+
   async register(req: Request, res: Response) {
     try {
-      const { name, surname, username, email, role } = req.body;
+      const { name, surname, username, email } = req.body;
 
       if (!name || !surname || !username || !email) {
         return res.status(400).json({
