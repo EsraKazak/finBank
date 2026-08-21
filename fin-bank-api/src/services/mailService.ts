@@ -1,6 +1,46 @@
 import nodemailer from "nodemailer";
 
 export class MailService {
+  private static readonly CLIENT_URL =
+    process.env.CLIENT_URL || "http://localhost:5173";
+
+  // Transporter tek bir instance olarak tanımlandı
+  private static readonly transporter = nodemailer.createTransport({
+    service: "gmail",
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+
+  // Ortak mail gönderim fonksiyonu
+  private static async send({
+    to,
+    subject,
+    html,
+    senderTitle = "Bilgilendirme",
+  }: {
+    to: string;
+    subject: string;
+    html: string;
+    senderTitle?: string;
+  }) {
+    try {
+      return await this.transporter.sendMail({
+        from: `"FinBank ${senderTitle}" <${process.env.SMTP_USER}>`,
+        to,
+        subject,
+        html,
+      });
+    } catch (error: any) {
+      console.error(`E-posta gönderim hatası (${subject}):`, error);
+      throw new Error("E-posta gönderimi başarısız oldu.");
+    }
+  }
+
   // Hoş Geldin E-postası Metodu
   static async sendWelcomeEmail(
     toEmail: string,
@@ -8,19 +48,6 @@ export class MailService {
     username: string,
     rawPassword: string,
   ) {
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
-
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 550px; margin: auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
         <h2 style="color: #1976d2; margin-top: 0; text-align: center;">FinBank Ailesine Hoş Geldiniz!</h2>
@@ -35,7 +62,7 @@ export class MailService {
         </div>
 
         <div style="text-align: center; margin: 25px 0;">
-          <a href="${CLIENT_URL}/login" style="background-color: #1976d2; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">
+          <a href="${this.CLIENT_URL}/login" style="background-color: #1976d2; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">
             Portala Giriş Yap
           </a>
         </div>
@@ -46,39 +73,21 @@ export class MailService {
       </div>
     `;
 
-    try {
-      const info = await transporter.sendMail({
-        from: `"FinBank Bilgilendirme" <${process.env.SMTP_USER}>`,
-        to: toEmail,
-        subject: "FinBank - Hesabınız Oluşturuldu",
-        html: htmlContent,
-      });
-
-      return info;
-    } catch (error: any) {
-      console.error("Hoş geldin maili gönderilemedi:", error);
-    }
+    return await this.send({
+      to: toEmail,
+      subject: "FinBank - Hesabınız Oluşturuldu",
+      html: htmlContent,
+      senderTitle: "Bilgilendirme",
+    });
   }
 
-  //şifre sıfırlama emaili
+  // Şifre Sıfırlama E-postası
   static async sendPasswordResetEmail(
     toEmail: string,
     resetToken: string,
     name: string,
   ) {
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
-
-    const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
-    const resetLink = `${CLIENT_URL}/reset-password?token=${resetToken}`;
+    const resetLink = `${this.CLIENT_URL}/reset-password?token=${resetToken}`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 550px; margin: auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
@@ -98,18 +107,48 @@ export class MailService {
       </div>
     `;
 
-    try {
-      const info = await transporter.sendMail({
-        from: `"FinBank Destek" <${process.env.SMTP_USER}>`,
-        to: toEmail,
-        subject: "FinBank - Şifre Sıfırlama Bağlantısı",
-        html: htmlContent,
-      });
+    return await this.send({
+      to: toEmail,
+      subject: "FinBank - Şifre Sıfırlama Bağlantısı",
+      html: htmlContent,
+      senderTitle: "Destek",
+    });
+  }
 
-      return info;
-    } catch (error: any) {
-      console.error("Nodemailer mail gönderme hatası:", error);
-      throw new Error("E-posta gönderimi başarısız oldu.");
-    }
+  //kayıt olurken şifre maile gelir orada aktive olur
+  static async sendInvitationEmail(
+    toEmail: string,
+    fullName: string,
+    setupToken: string,
+  ) {
+    const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
+    const setupLink = `${CLIENT_URL}/setup-password?token=${setupToken}`;
+
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 550px; margin: auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
+        <h2 style="color: #1976d2; margin-top: 0; text-align: center;">FinBank Ailesine Hoş Geldiniz!</h2>
+        <p style="font-size: 15px; color: #333;">Sayın <strong>${fullName}</strong>,</p>
+        <p style="font-size: 14px; color: #555; line-height: 1.5;">
+          FinBank Personel Yönetim Portalı hesabınız tanımlanmıştır. Hesabınızı aktif hale getirmek ve ilk şifrenizi belirlemek için aşağıdaki butona tıklayınız:
+        </p>
+
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${setupLink}" style="background-color: #1976d2; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">
+            Hesabımı Aktifleştir & Şifre Oluştur
+          </a>
+        </div>
+
+        <p style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 12px;">
+          Bu bağlantı <strong>24 saat</strong> boyunca geçerlidir. Bu talebi siz yapmadıysanız lütfen bu e-postayı dikkate almayınız.
+        </p>
+      </div>
+    `;
+
+    return await this.send({
+      to: toEmail,
+      subject: "FinBank - Hesabınızı Aktifleştirin",
+      html: htmlContent,
+      senderTitle: "Hesap Aktivasyonu",
+    });
   }
 }

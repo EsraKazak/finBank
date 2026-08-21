@@ -6,6 +6,7 @@ import { ProtectedRoute } from "./ProtectedRoute";
 import { PublicRoute } from "./PublicRoute";
 import { ForgotPasswordPage } from "../pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "../pages/ResetPasswordPage";
+import { SetupPasswordPage } from "../pages/SetupPasswordPage";
 
 export const router = createBrowserRouter([
   // 1. Sadece Giriş Yapmamışlara Açık Alan
@@ -23,6 +24,10 @@ export const router = createBrowserRouter([
       {
         path: "/reset-password",
         element: <ResetPasswordPage />,
+      },
+      {
+        path: "/setup-password",
+        element: <SetupPasswordPage />,
       },
     ],
   },

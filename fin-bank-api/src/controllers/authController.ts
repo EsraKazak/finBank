@@ -1,16 +1,15 @@
 import { Request, Response } from "express";
 import authService from "../services/authService";
-import { MailService } from "../services/mailService";
 
 class AuthController {
   async register(req: Request, res: Response) {
     try {
-      const { name, surname, username, email, password, role } = req.body;
+      const { name, surname, username, email, role } = req.body;
 
-      if (!name || !surname || !username || !email || !password) {
+      if (!name || !surname || !username || !email) {
         return res.status(400).json({
           message:
-            "Lütfen ad, soyad, kullanıcı adı, e-posta ve şifre alanlarını doldurun.",
+            "Lütfen ad, soyad, kullanıcı adı ve e-posta alanlarını doldurun.",
         });
       }
 
@@ -19,16 +18,11 @@ class AuthController {
         surname,
         username,
         email,
-        password,
-        role: role || "BANKO_ASISTANI",
       });
 
-      // Kullanıcı oluştuktan sonra hoş geldin mailini gönderiyoruz:
-      const fullName = `${name} ${surname}`;
-      MailService.sendWelcomeEmail(email, fullName, username, password);
-
       return res.status(201).json({
-        message: "Personel kaydı başarıyla oluşturuldu.",
+        message:
+          "Personel kaydı başarıyla oluşturuldu. Şifre belirleme daveti e-posta adresine gönderildi.",
         user: newUser,
       });
     } catch (error: any) {
@@ -51,10 +45,10 @@ class AuthController {
       const result = await authService.login(username, password);
 
       res.cookie("refreshToken", result.refreshToken, {
-        httpOnly: true, // JavaScript (XSS) ile okunamaz
-        secure: process.env.NODE_ENV === "production", // Sadece HTTPS'de gönderilsin
-        sameSite: "lax", // CSRF koruması
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 gün
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       });
 
       return res
@@ -77,14 +71,12 @@ class AuthController {
       }
 
       const result = await authService.refreshAccessToken(refreshToken);
-      return res.status(200).json(result); // { accessToken: "yeni_token" } döner
+      return res.status(200).json(result);
     } catch (error: any) {
-      // Refresh token geçersizse veya süresi dolmuşsa 401 Unauthorized dönüyoruz
       return res.status(401).json({ message: error.message });
     }
   }
 
-  // Çıkış Yapma (Cookie ve Redis oturumunu temizleme)
   async logout(req: Request, res: Response) {
     try {
       const refreshToken = req.cookies.refreshToken;
@@ -92,7 +84,6 @@ class AuthController {
         await authService.logout(refreshToken);
       }
 
-      // Tarayıcıdaki cookie'yi sıfırla
       res.clearCookie("refreshToken", {
         httpOnly: true,
         sameSite: "strict",
@@ -107,10 +98,8 @@ class AuthController {
     }
   }
 
-  // Mevcut login ve refresh fonksiyonlarının yanına:
   async getMe(req: any, res: Response) {
     try {
-      // authMiddleware req.user içine token'dan çözdüğü payload'u koyar
       return res.status(200).json({ user: req.user });
     } catch (error: any) {
       return res
@@ -119,7 +108,6 @@ class AuthController {
     }
   }
 
-  // unutulan veya yenilenmek istenen şifre için
   async forgotPassword(req: Request, res: Response) {
     try {
       const { email } = req.body;

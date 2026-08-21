@@ -10,15 +10,15 @@ import {
   InputAdornment,
   IconButton,
 } from "@mui/material";
-import LockOpenOutlinedIcon from "@mui/icons-material/LockOpenOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import KeyIcon from "@mui/icons-material/Key";
 import Visibility from "@mui/icons-material/Visibility";
 import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import api from "../services/api";
 
-export const ResetPasswordPage: React.FC = () => {
+export const SetupPasswordPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token");
   const navigate = useNavigate();
@@ -40,7 +40,7 @@ export const ResetPasswordPage: React.FC = () => {
       return;
     }
     if (!token) {
-      setError("Geçersiz veya eksik sıfırlama kodu.");
+      setError("Geçersiz veya süresi dolmuş aktivasyon kodu.");
       return;
     }
 
@@ -48,14 +48,18 @@ export const ResetPasswordPage: React.FC = () => {
     setLoading(true);
 
     try {
+      // Backend'deki şifre belirleme ucuna istek atılır
       const res = await api.post("/auth/reset-password", { token, password });
-      setMessage(res.data.message || "Şifreniz başarıyla güncellendi!");
+      setMessage(
+        res.data.message ||
+          "Hesabınız başarıyla aktifleştirildi! Giriş sayfasına yönlendiriliyorsunuz.",
+      );
       setTimeout(() => {
         navigate("/login");
       }, 3000);
     } catch (err: any) {
       setError(
-        err.response?.data?.message || "Şifre sıfırlama işlemi başarısız.",
+        err.response?.data?.message || "Şifre oluşturma işlemi başarısız.",
       );
     } finally {
       setLoading(false);
@@ -105,39 +109,35 @@ export const ResetPasswordPage: React.FC = () => {
             boxShadow: isSuccess
               ? "0 6px 16px rgba(46, 125, 50, 0.15)"
               : "0 6px 16px rgba(25, 118, 210, 0.15)",
-            transition: "all 0.3s ease",
           }}
         >
           {isSuccess ? (
             <CheckCircleIcon sx={{ fontSize: 36 }} />
           ) : (
-            <LockOpenOutlinedIcon sx={{ fontSize: 34 }} />
+            <KeyIcon sx={{ fontSize: 34 }} />
           )}
         </Box>
 
-        {/* Başlık ve Bilgilendirme */}
         <Typography
           variant="h5"
           component="h1"
           sx={{
             fontWeight: 800,
-            letterSpacing: "-0.3px",
             background: "linear-gradient(45deg, #0a192f 30%, #1976d2 90%)",
             WebkitBackgroundClip: "text",
             WebkitTextFillColor: "transparent",
             mb: 1,
           }}
         >
-          Yeni Şifre Belirle
+          Hesap Şifresi Oluştur
         </Typography>
         <Typography
           variant="body2"
           sx={{ color: "text.secondary", mb: 3, lineHeight: 1.6 }}
         >
-          Hesabınız için güçlü ve güvenli yeni bir şifre tanımlayın.
+          FinBank portalına erişebilmek için ilk giriş şifrenizi belirleyin.
         </Typography>
 
-        {/* Bildirim Alanları */}
         {message && (
           <Alert
             severity="success"
@@ -157,7 +157,6 @@ export const ResetPasswordPage: React.FC = () => {
           </Alert>
         )}
 
-        {/* Form */}
         <Box component="form" onSubmit={handleSubmit}>
           <TextField
             margin="normal"
@@ -183,11 +182,9 @@ export const ResetPasswordPage: React.FC = () => {
                 endAdornment: (
                   <InputAdornment position="end">
                     <IconButton
-                      aria-label="şifre görünürlüğünü değiştir"
                       onClick={() => setShowPassword(!showPassword)}
                       edge="end"
                       size="small"
-                      disabled={loading || isSuccess}
                     >
                       {showPassword ? (
                         <VisibilityOff fontSize="small" />
@@ -225,13 +222,11 @@ export const ResetPasswordPage: React.FC = () => {
                 endAdornment: (
                   <InputAdornment position="end">
                     <IconButton
-                      aria-label="şifre onay görünürlüğünü değiştir"
                       onClick={() =>
                         setShowConfirmPassword(!showConfirmPassword)
                       }
                       edge="end"
                       size="small"
-                      disabled={loading || isSuccess}
                     >
                       {showConfirmPassword ? (
                         <VisibilityOff fontSize="small" />
@@ -261,14 +256,7 @@ export const ResetPasswordPage: React.FC = () => {
               background: isSuccess
                 ? "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)"
                 : "linear-gradient(135deg, #1976d2 0%, #0d47a1 100%)",
-              boxShadow: isSuccess
-                ? "0 6px 16px rgba(46, 125, 50, 0.35)"
-                : "0 6px 16px rgba(25, 118, 210, 0.35)",
-              "&:hover": {
-                background: isSuccess
-                  ? "linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%)"
-                  : "linear-gradient(135deg, #1565c0 0%, #0a3880 100%)",
-              },
+              boxShadow: "0 6px 16px rgba(25, 118, 210, 0.35)",
             }}
           >
             {loading ? (
@@ -276,7 +264,7 @@ export const ResetPasswordPage: React.FC = () => {
             ) : isSuccess ? (
               "Giriş Ekranına Yönlendiriliyorsunuz..."
             ) : (
-              "Şifreyi Güncelle"
+              "Şifremi Oluştur ve Kaydet"
             )}
           </Button>
         </Box>

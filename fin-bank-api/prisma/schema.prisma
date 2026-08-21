@@ -1,0 +1,45 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  ADMIN
+  BANKO_ASISTANI
+}
+
+enum WhitelistStatus {
+  PENDING
+  COMPLETED
+}
+
+model AuthorizedPersonnel {
+  id        String          @id @default(uuid())
+  email     String          @unique
+  name      String
+  surname   String
+  role      Role            @default(BANKO_ASISTANI)
+  status    WhitelistStatus @default(PENDING)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@map("authorized_personnel")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  surname   String
+  username  String   @unique
+  email     String   @unique
+  password  String   @default("")
+  role      Role     @default(BANKO_ASISTANI)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}

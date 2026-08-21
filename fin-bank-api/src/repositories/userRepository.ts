@@ -1,46 +1,44 @@
-import redis from "../config/redis";
-import { IUser } from "../types/user.types";
+import prisma from "../config/prisma";
+import { Role } from "@prisma/client";
 
-//Kodun geri kalanını veritabanı sorgularından izole etmek için. Yarın Redis yerine PostgreSQL gelse sadece burası değişir.
 class UserRepository {
-  async findByUsername(username: string): Promise<IUser | null> {
-    const user = await redis.hgetall(`user:${username}`);
-    if (!user || !user.username) {
-      return null;
-    }
-    //as unknown kullanmak typescripte bunu ısuer gibi kullan demektir
-    return {
-      ...(user as unknown as IUser),
-      role: (user.role as IUser["role"]) || "BANKO_ASISTANI",
-    };
+  // Kullanıcı tablosu işlemleri (PostgreSQL)
+  async findByUsername(username: string) {
+    return await prisma.user.findUnique({ where: { username } });
   }
 
-  // Şifremi unuttum akışında kullanmak için email ile arama
-  async findByEmail(email: string): Promise<IUser | null> {
-    const username = await redis.get(`email_to_user:${email}`);
-    if (!username) return null;
-    return this.findByUsername(username);
+  async findByEmail(email: string) {
+    return await prisma.user.findUnique({ where: { email } });
   }
 
-  async createUser(user: IUser): Promise<void> {
-    await redis.hset(`user:${user.username}`, {
-      id: user.id,
-      name: user.name,
-      surname: user.surname,
-      username: user.username,
-      email: user.email,
-      password: user.password || "",
-      role: user.role || "BANKO_ASISTANI",
+  async createUser(data: {
+    name: string;
+    surname: string;
+    username: string;
+    email: string;
+    password?: string;
+    role?: Role;
+  }) {
+    return await prisma.user.create({ data });
+  }
+
+  async updatePassword(username: string, passwordHash: string) {
+    return await prisma.user.update({
+      where: { username },
+      data: { password: passwordHash },
     });
-    await redis.set(`email_to_user:${user.email}`, user.username);
   }
 
-  // şifre yenileme sıfırlam için
-  async updatePassword(
-    username: string,
-    newHashedPassword: string,
-  ): Promise<void> {
-    await redis.hset(`user:${username}`, "password", newHashedPassword);
+  // Beyaz Liste (Whitelist) işlemleri
+  async findAuthorizedEmail(email: string) {
+    return await prisma.authorizedPersonnel.findUnique({ where: { email } });
+  }
+
+  async markAuthorizedAsCompleted(email: string) {
+    return await prisma.authorizedPersonnel.update({
+      where: { email },
+      data: { status: "COMPLETED" },
+    });
   }
 }
 

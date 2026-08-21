@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Container,
   Paper,
   Typography,
   Box,
@@ -13,39 +12,40 @@ import {
   Button,
   Link,
   CircularProgress,
+  InputAdornment,
 } from "@mui/material";
-import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
-import PersonAddAltIcon from "@mui/icons-material/PersonAddAlt";
+import PersonIcon from "@mui/icons-material/Person";
+import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
+import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
+import HowToRegOutlinedIcon from "@mui/icons-material/HowToRegOutlined";
+import LoginIcon from "@mui/icons-material/Login";
 import { LoginForm } from "../features/auth/LoginForm";
 import { useAuth } from "../hooks/useAuth";
 import api from "../services/api";
 
 export const LoginPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<number>(0); // 0: Giriş, 1: Kayıt
+  const [activeTab, setActiveTab] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Kayıt Formu State'leri
+  // Şifre alanı kaldırıldı
   const [registerForm, setRegisterForm] = useState({
     name: "",
     surname: "",
     username: "",
     email: "",
-    password: "",
   });
 
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // Sekme Değişimi
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
     setError(null);
     setSuccessMsg(null);
   };
 
-  // 1. Giriş Yapma İşlemi
   const handleLogin = async (username: string, pass: string) => {
     setError(null);
     setLoading(true);
@@ -55,14 +55,13 @@ export const LoginPage: React.FC = () => {
     } catch (err: any) {
       setError(
         err.response?.data?.message ||
-          "Giriş yapılamadı. Bilgilerinizi kontrol edin.",
+          "Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.",
       );
     } finally {
       setLoading(false);
     }
   };
 
-  // 2. Yeni Personel Kaydı İşlemi
   const handleRegisterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setRegisterForm({
       ...registerForm,
@@ -77,27 +76,24 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      // Backend /auth/register ucuna istek atılıyor
       await api.post("/auth/register", {
         name: registerForm.name,
         surname: registerForm.surname,
         username: registerForm.username,
         email: registerForm.email,
-        password: registerForm.password,
-        role: "BANKO_ASISTANI", // Varsayılan banko asistanı rolü
+        role: "BANKO_ASISTANI",
       });
 
       setSuccessMsg(
-        "Personel kaydı başarıyla oluşturuldu! Giriş yapabilirsiniz.",
+        "Personel kaydı oluşturuldu! Şifre belirleme bağlantısı e-posta adresine gönderildi.",
       );
       setRegisterForm({
         name: "",
         surname: "",
         username: "",
         email: "",
-        password: "",
       });
-      setActiveTab(0); // Başarılı kayıttan sonra Giriş Yap sekmesine geçir
+      setActiveTab(0);
     } catch (err: any) {
       setError(
         err.response?.data?.message ||
@@ -118,53 +114,116 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="xs" sx={{ mt: 8, mb: 4 }}>
+    <Box
+      sx={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background:
+          "linear-gradient(135deg, #0a192f 0%, #172a45 50%, #0d2538 100%)",
+        p: 2,
+      }}
+    >
       <Paper
-        elevation={4}
+        elevation={12}
         sx={{
-          p: 4,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          borderRadius: 3,
+          width: "100%",
+          maxWidth: activeTab === 1 ? 520 : 440,
+          p: { xs: 3, sm: 4.5 },
+          borderRadius: 4,
+          backgroundColor: "rgba(255, 255, 255, 0.96)",
+          backdropFilter: "blur(12px)",
+          boxShadow: "0 20px 45px rgba(0, 0, 0, 0.35)",
+          transition: "max-width 0.3s ease",
         }}
       >
         {/* Logo ve Başlık */}
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1,
-            color: "primary.main",
-            mb: 1,
-          }}
-        >
-          <LockOutlinedIcon fontSize="large" />
-          <Typography variant="h4" component="h1" sx={{ fontWeight: "bold" }}>
+        <Box sx={{ textAlign: "center", mb: 3 }}>
+          <Box
+            component="img"
+            src="/favicon.ico"
+            alt="FinBank Logo"
+            onError={(e: any) => {
+              e.currentTarget.style.display = "none";
+            }}
+            sx={{
+              width: 56,
+              height: 56,
+              mx: "auto",
+              mb: 1.5,
+              borderRadius: "50%",
+              boxShadow: "0 4px 14px rgba(10, 25, 47, 0.15)",
+            }}
+          />
+          <Typography
+            variant="h4"
+            sx={{
+              fontWeight: 800,
+              letterSpacing: "-0.5px",
+              background: "linear-gradient(45deg, #0a192f 30%, #1976d2 90%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
             FinBank
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{ color: "text.secondary", mt: 0.5, fontWeight: 500 }}
+          >
+            Personel Yönetim & Yetkilendirme Portalı
           </Typography>
         </Box>
 
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Personel İşlem Merkezi
-        </Typography>
-
-        {/* Giriş / Kayıt Sekmeleri */}
-        <Tabs
-          value={activeTab}
-          onChange={handleTabChange}
-          variant="fullWidth"
-          sx={{ width: "100%", mb: 3, borderBottom: 1, borderColor: "divider" }}
+        {/* Sekmeler */}
+        <Box
+          sx={{
+            p: 0.6,
+            bgcolor: "#f1f5f9",
+            borderRadius: 3,
+            mb: 3,
+          }}
         >
-          <Tab label="Giriş Yap" />
-          <Tab
-            label="Yeni Personel"
-            icon={<PersonAddAltIcon fontSize="small" />}
-            iconPosition="start"
-          />
-        </Tabs>
+          <Tabs
+            value={activeTab}
+            onChange={handleTabChange}
+            variant="fullWidth"
+            sx={{
+              minHeight: 40,
+              "& .MuiTabs-indicator": {
+                display: "none",
+              },
+              "& .MuiTab-root": {
+                minHeight: 40,
+                borderRadius: 2.5,
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                textTransform: "none",
+                color: "#64748b",
+                transition: "all 0.2s ease-in-out",
+                "&.Mui-selected": {
+                  color: "#0a192f",
+                  bgcolor: "#ffffff",
+                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.08)",
+                },
+              },
+            }}
+          >
+            <Tab
+              icon={<LoginIcon sx={{ fontSize: 18 }} />}
+              iconPosition="start"
+              label="Giriş Yap"
+            />
+            <Tab
+              icon={<HowToRegOutlinedIcon sx={{ fontSize: 18 }} />}
+              iconPosition="start"
+              label="Yeni Personel"
+            />
+          </Tabs>
+        </Box>
 
-        {/* 1. SEKME: GİRİŞ YAP FORMU */}
+        {/* 1. SEKME: GİRİŞ FORMU */}
         {activeTab === 0 && (
           <Box sx={{ width: "100%" }}>
             <LoginForm
@@ -172,15 +231,16 @@ export const LoginPage: React.FC = () => {
               isLoading={loading}
               errorMessage={error}
             />
-            <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 1.5 }}>
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2 }}>
               <Link
                 component="button"
                 type="button"
                 variant="body2"
                 onClick={() => navigate("/forgot-password")}
                 sx={{
+                  color: "primary.main",
+                  fontWeight: 600,
                   textDecoration: "none",
-                  fontWeight: 500,
                   "&:hover": { textDecoration: "underline" },
                 }}
               >
@@ -190,54 +250,81 @@ export const LoginPage: React.FC = () => {
           </Box>
         )}
 
-        {/* 2. SEKME: YENİ PERSONEL OLUŞTURMA FORMU */}
+        {/* 2. SEKME: ŞİFRESİZ KAYIT FORMU */}
         {activeTab === 1 && (
           <Box
             component="form"
             onSubmit={handleRegisterSubmit}
             sx={{ width: "100%" }}
           >
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              id="name"
-              label="Ad"
-              name="name"
-              autoFocus
-              value={registerForm.name}
-              onChange={handleRegisterChange}
-              disabled={loading}
-            />
+            <Box sx={{ display: "flex", gap: 1.5, mb: 1.5 }}>
+              <TextField
+                required
+                fullWidth
+                size="small"
+                id="name"
+                label="Ad"
+                name="name"
+                value={registerForm.name}
+                onChange={handleRegisterChange}
+                disabled={loading}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <BadgeOutlinedIcon
+                          fontSize="small"
+                          sx={{ color: "action.active" }}
+                        />
+                      </InputAdornment>
+                    ),
+                  },
+                }}
+              />
+              <TextField
+                required
+                fullWidth
+                size="small"
+                id="surname"
+                label="Soyad"
+                name="surname"
+                value={registerForm.surname}
+                onChange={handleRegisterChange}
+                disabled={loading}
+              />
+            </Box>
 
             <TextField
-              margin="normal"
+              margin="dense"
               required
               fullWidth
-              id="surname"
-              label="Soyad"
-              name="surname"
-              value={registerForm.surname}
-              onChange={handleRegisterChange}
-              disabled={loading}
-            />
-
-            <TextField
-              margin="normal"
-              required
-              fullWidth
+              size="small"
               id="register-username"
               label="Kullanıcı Adı"
               name="username"
               value={registerForm.username}
               onChange={handleRegisterChange}
               disabled={loading}
+              sx={{ mb: 1.5 }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <PersonIcon
+                        fontSize="small"
+                        sx={{ color: "action.active" }}
+                      />
+                    </InputAdornment>
+                  ),
+                },
+              }}
             />
 
             <TextField
-              margin="normal"
+              margin="dense"
               required
               fullWidth
+              size="small"
               id="register-email"
               label="Kurumsal E-posta"
               name="email"
@@ -245,18 +332,19 @@ export const LoginPage: React.FC = () => {
               value={registerForm.email}
               onChange={handleRegisterChange}
               disabled={loading}
-            />
-            <TextField
-              margin="normal"
-              required
-              fullWidth
-              name="password"
-              label="Şifre"
-              type="password"
-              id="register-password"
-              value={registerForm.password}
-              onChange={handleRegisterChange}
-              disabled={loading}
+              sx={{ mb: 2 }}
+              slotProps={{
+                input: {
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <EmailOutlinedIcon
+                        fontSize="small"
+                        sx={{ color: "action.active" }}
+                      />
+                    </InputAdornment>
+                  ),
+                },
+              }}
             />
 
             <Button
@@ -264,19 +352,32 @@ export const LoginPage: React.FC = () => {
               fullWidth
               variant="contained"
               disabled={loading}
-              sx={{ mt: 3, mb: 1, py: 1.2, fontWeight: 600, borderRadius: 2 }}
+              sx={{
+                mt: 1,
+                py: 1.2,
+                fontSize: "0.95rem",
+                fontWeight: 700,
+                textTransform: "none",
+                borderRadius: 2.5,
+                background: "linear-gradient(135deg, #1976d2 0%, #0d47a1 100%)",
+                boxShadow: "0 6px 16px rgba(25, 118, 210, 0.35)",
+                "&:hover": {
+                  background:
+                    "linear-gradient(135deg, #1565c0 0%, #0a3880 100%)",
+                },
+              }}
             >
               {loading ? (
                 <CircularProgress size={24} color="inherit" />
               ) : (
-                "Personel Kaydını Tamamla"
+                "Davet Bağlantısı Gönder"
               )}
             </Button>
           </Box>
         )}
       </Paper>
 
-      {/* Bildirimler (Hata ve Başarı Toast Mesajları) */}
+      {/* Toast Bildirimleri */}
       <Snackbar
         open={Boolean(error || successMsg)}
         autoHideDuration={5000}
@@ -287,11 +388,11 @@ export const LoginPage: React.FC = () => {
           onClose={handleCloseSnackbar}
           severity={error ? "error" : "success"}
           variant="filled"
-          sx={{ width: "100%", boxShadow: 3 }}
+          sx={{ width: "100%", borderRadius: 2, boxShadow: 6 }}
         >
           {error || successMsg}
         </Alert>
       </Snackbar>
-    </Container>
+    </Box>
   );
 };
