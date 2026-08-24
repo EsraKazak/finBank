@@ -1,5 +1,3 @@
-import nodemailer from "nodemailer";
-
 export class MailService {
   private static get clientUrl(): string {
     return (
@@ -9,21 +7,31 @@ export class MailService {
     );
   }
 
-  // Gmail OAuth 2.0 Taşıyıcısı
-  private static get transporter() {
-    return nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        type: "OAuth2",
-        user: process.env.SMTP_USER,
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
-      },
+  // Google OAuth 2.0 Access Token Alma (HTTPS Port 443)
+  private static async getAccessToken(): Promise<string> {
+    const params = new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID || "",
+      client_secret: process.env.GOOGLE_CLIENT_SECRET || "",
+      refresh_token: process.env.GOOGLE_REFRESH_TOKEN || "",
+      grant_type: "refresh_token",
     });
+
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: params.toString(),
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.access_token) {
+      console.error("[Google OAuth Hatası]:", data);
+      throw new Error("Google access token alınamadı.");
+    }
+
+    return data.access_token;
   }
 
-  // Merkezi Gönderim Metodu
+  // Merkezi Gönderim Metodu (Gmail REST API - Port Kısıtlamasından Etkilenmez)
   private static async send({
     to,
     subject,
@@ -37,25 +45,56 @@ export class MailService {
   }) {
     try {
       console.log(
-        `[MailService] E-posta gönderimi başlatılıyor -> Kime: ${to}, SMTP_USER: ${process.env.SMTP_USER}`,
+        `[MailService] E-posta gönderimi başlatılıyor (HTTPS API) -> Kime: ${to}`,
       );
 
-      const info = await this.transporter.sendMail({
-        from: `"FinBank ${senderTitle}" <${process.env.SMTP_USER}>`,
-        to,
-        subject,
+      const accessToken = await this.getAccessToken();
+
+      // RFC 2822 Standartlarında E-posta Başlığı ve Gövdesi
+      const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString("base64")}?=`;
+      const messageParts = [
+        `From: "FinBank ${senderTitle}" <${process.env.SMTP_USER}>`,
+        `To: ${to}`,
+        `Subject: ${utf8Subject}`,
+        "MIME-Version: 1.0",
+        "Content-Type: text/html; charset=utf-8",
+        "Content-Transfer-Encoding: 7bit",
+        "",
         html,
-      });
+      ];
+      const message = messageParts.join("\r\n");
 
-      console.log(
-        `[MailService] E-posta başarıyla gönderildi: ${info.messageId}`,
+      // Web-Safe Base64 Formatı
+      const encodedMessage = Buffer.from(message)
+        .toString("base64")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=+$/, "");
+
+      const res = await fetch(
+        "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ raw: encodedMessage }),
+        },
       );
-      return info;
+
+      const result = await res.json();
+      if (!res.ok) {
+        console.error("[Gmail API Hata Yanıtı]:", result);
+        throw new Error("Gmail API isteği reddetti.");
+      }
+
+      console.log(`[MailService] E-posta başarıyla iletildi: ${result.id}`);
+      return result;
     } catch (error: any) {
-      // Google / Nodemailer'ın döndürdüğü gerçek hatayı loglayın:
       console.error(
         `[MailService Hatası] (${subject}):`,
-        error.response || error.message || error,
+        error.message || error,
       );
       throw new Error(`E-posta gönderimi başarısız oldu: ${error.message}`);
     }
