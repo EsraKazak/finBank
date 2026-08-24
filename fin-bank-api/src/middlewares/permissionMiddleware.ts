@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from "express";
-import { Permission } from "../types/user.types";
 
-export const requirePermission = (requiredPermission: Permission) => {
+export const requirePermission = (requiredPermission: string) => {
   return (req: any, res: Response, next: NextFunction) => {
     const user = req.user;
 
