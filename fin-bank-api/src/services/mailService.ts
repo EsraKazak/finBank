@@ -36,6 +36,10 @@ export class MailService {
     senderTitle?: string;
   }) {
     try {
+      console.log(
+        `[MailService] E-posta gönderimi başlatılıyor -> Kime: ${to}, SMTP_USER: ${process.env.SMTP_USER}`,
+      );
+
       const info = await this.transporter.sendMail({
         from: `"FinBank ${senderTitle}" <${process.env.SMTP_USER}>`,
         to,
@@ -43,10 +47,17 @@ export class MailService {
         html,
       });
 
+      console.log(
+        `[MailService] E-posta başarıyla gönderildi: ${info.messageId}`,
+      );
       return info;
     } catch (error: any) {
-      console.error(`E-posta gönderim hatası (${subject}):`, error);
-      throw new Error("E-posta gönderimi başarısız oldu.");
+      // Google / Nodemailer'ın döndürdüğü gerçek hatayı loglayın:
+      console.error(
+        `[MailService Hatası] (${subject}):`,
+        error.response || error.message || error,
+      );
+      throw new Error(`E-posta gönderimi başarısız oldu: ${error.message}`);
     }
   }
 
