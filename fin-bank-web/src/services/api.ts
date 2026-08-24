@@ -1,6 +1,5 @@
-// src/services/api.ts
-
 import axios from "axios";
+import type { IAdminUserItem, IRole, IPermission } from "../types/auth.types";
 
 // Canlı ortamda (Render) VITE_API_BASE_URL kullanılır, yerelde localhost'a döner
 const BASE_URL =
@@ -99,6 +98,44 @@ export const loginUser = async (
     password,
   });
   return response.data;
+};
+
+export const adminApi = {
+  // 1. Personeli Beyaz Listeye Davet Etme (Role olmadan)
+  addAuthorizedPersonnel: async (data: {
+    name: string;
+    surname: string;
+    email: string;
+  }) => {
+    const response = await api.post("/auth/authorized-personnel", data);
+    return response.data;
+  },
+
+  // 2. Beyaz Listedeki Davetleri Getirme
+  getAuthorizedPersonnelList: async () => {
+    const response = await api.get("/auth/authorized-personnel");
+    return response.data;
+  },
+
+  // 3. Kayıt Olmuş Tüm Kullanıcıları ve Mevcut Rollerini Listeleme
+  getUsers: async () => {
+    const response = await api.get<{ data: IAdminUserItem[] }>("/admin/users");
+    return response.data.data;
+  },
+
+  // 4. Sistemdeki Tüm Rolleri ve İzinleri Getirme
+  getRolesAndPermissions: async () => {
+    const response = await api.get<{
+      data: { roles: IRole[]; permissions: IPermission[] };
+    }>("/admin/roles-permissions");
+    return response.data.data;
+  },
+
+  // 5. Kayıtlı Personele Rol Atama / Güncelleme
+  assignRole: async (userId: string, roleId: string) => {
+    const response = await api.post("/admin/assign-role", { userId, roleId });
+    return response.data;
+  },
 };
 
 export default api;

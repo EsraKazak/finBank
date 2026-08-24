@@ -1,9 +1,29 @@
+import nodemailer from "nodemailer";
+
 export class MailService {
   private static get clientUrl(): string {
-    return process.env.CLIENT_URL || "http://localhost:5173";
+    return (
+      process.env.CLIENT_URL ||
+      process.env.FRONTEND_URL ||
+      "http://localhost:5173"
+    );
   }
 
-  // Doğrudan Brevo REST API üzerinden gönderim (Harici paket gerektirmez)
+  // Gmail OAuth 2.0 Taşıyıcısı
+  private static get transporter() {
+    return nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        type: "OAuth2",
+        user: process.env.SMTP_USER,
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
+      },
+    });
+  }
+
+  // Merkezi Gönderim Metodu
   private static async send({
     to,
     subject,
@@ -16,31 +36,14 @@ export class MailService {
     senderTitle?: string;
   }) {
     try {
-      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json",
-          "api-key": process.env.BREVO_API_KEY || "",
-        },
-        body: JSON.stringify({
-          sender: {
-            name: `FinBank ${senderTitle}`,
-            email: process.env.SMTP_USER || "esrakazak321@gmail.com",
-          },
-          to: [{ email: to }],
-          subject,
-          htmlContent: html,
-        }),
+      const info = await this.transporter.sendMail({
+        from: `"FinBank ${senderTitle}" <${process.env.SMTP_USER}>`,
+        to,
+        subject,
+        html,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error("Brevo API Hata Yanıtı:", errorData);
-        throw new Error("E-posta servisi isteği reddetti.");
-      }
-
-      return await response.json();
+      return info;
     } catch (error: any) {
       console.error(`E-posta gönderim hatası (${subject}):`, error);
       throw new Error("E-posta gönderimi başarısız oldu.");

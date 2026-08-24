@@ -17,6 +17,7 @@ import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import api from "../services/api";
+import { validatePassword } from "../utils/passwordValidator";
 
 export const SetupPasswordPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -35,31 +36,47 @@ export const SetupPasswordPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    if (!token) {
+      setError("Geçersiz veya süresi dolmuş aktivasyon linki.");
+      return;
+    }
+
+    // 1. Şifre Güvenlik Kontrolü (admin123* kuralı)
+    const validation = validatePassword(password);
+    if (!validation.isValid) {
+      setError(validation.message || "Şifre güvenlik kriterlerini sağlamıyor.");
+      return;
+    }
+
+    // 2. Şifre Eşleşme Kontrolü
     if (password !== confirmPassword) {
       setError("Şifreler birbiriyle eşleşmiyor.");
       return;
     }
-    if (!token) {
-      setError("Geçersiz veya süresi dolmuş aktivasyon kodu.");
-      return;
-    }
 
-    setError(null);
     setLoading(true);
 
     try {
-      // Backend'deki şifre belirleme ucuna istek atılır
-      const res = await api.post("/auth/reset-password", { token, password });
+      // Backend Controller'ınız req.body.newPassword veya req.body.password bekleyebilir, ikisini de garantiye alalım:
+      const res = await api.post("/auth/reset-password", {
+        token,
+        newPassword: password,
+        password: password,
+      });
+
       setMessage(
         res.data.message ||
-          "Hesabınız başarıyla aktifleştirildi! Giriş sayfasına yönlendiriliyorsunuz.",
+          "Şifreniz başarıyla kaydedildi! Giriş sayfasına yönlendiriliyorsunuz...",
       );
+
       setTimeout(() => {
         navigate("/login");
-      }, 3000);
+      }, 2500);
     } catch (err: any) {
       setError(
-        err.response?.data?.message || "Şifre oluşturma işlemi başarısız.",
+        err.response?.data?.message || "Şifre oluşturma işlemi başarısız oldu.",
       );
     } finally {
       setLoading(false);
@@ -135,7 +152,8 @@ export const SetupPasswordPage: React.FC = () => {
           variant="body2"
           sx={{ color: "text.secondary", mb: 3, lineHeight: 1.6 }}
         >
-          FinBank portalına erişebilmek için ilk giriş şifrenizi belirleyin.
+          En az 8 karakter, 1 rakam ve 1 özel karakter içeren şifrenizi
+          belirleyin.
         </Typography>
 
         {message && (

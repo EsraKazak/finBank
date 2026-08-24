@@ -5,11 +5,11 @@ class AuthController {
   // Yönetici tarafından beyaz listeye personel tanımlama
   async addAuthorizedPersonnel(req: Request, res: Response) {
     try {
-      const { name, surname, email, role } = req.body;
+      const { name, surname, email } = req.body;
 
-      if (!name || !surname || !email || !role) {
+      if (!name || !surname || !email) {
         return res.status(400).json({
-          message: "Ad, soyad, e-posta ve rol alanları zorunludur.",
+          message: "Ad, soyad ve e-posta alanları zorunludur.",
         });
       }
 
@@ -17,7 +17,6 @@ class AuthController {
         name,
         surname,
         email,
-        role,
       });
 
       return res.status(201).json({
@@ -26,6 +25,16 @@ class AuthController {
       });
     } catch (error: any) {
       return res.status(400).json({ message: error.message });
+    }
+  }
+
+  // Beyaz listedeki personelleri listeleme
+  async getAuthorizedPersonnelList(req: Request, res: Response) {
+    try {
+      const list = await authService.getAuthorizedPersonnelList();
+      return res.status(200).json({ data: list });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message });
     }
   }
 
@@ -157,14 +166,16 @@ class AuthController {
 
   async resetPassword(req: Request, res: Response) {
     try {
-      const { token, password } = req.body;
-      if (!token || !password) {
+      const { token, password, newPassword } = req.body;
+      const targetPassword = password || newPassword;
+
+      if (!token || !targetPassword) {
         return res
           .status(400)
           .json({ message: "Geçersiz istek. Token ve yeni şifre zorunludur." });
       }
 
-      await authService.resetPassword(token, password);
+      await authService.resetPassword(token, targetPassword);
       return res.status(200).json({
         message:
           "Şifreniz başarıyla güncellendi. Yeni şifrenizle giriş yapabilirsiniz.",

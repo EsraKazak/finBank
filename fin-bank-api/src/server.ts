@@ -3,6 +3,8 @@ import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./routes/authRoutes";
 import cookieParser from "cookie-parser";
+import adminRoutes from "./routes/adminRoutes";
+import prisma from "./config/prisma";
 
 dotenv.config();
 
@@ -35,10 +37,23 @@ app.use(cookieParser());
 app.use(express.json());
 
 app.use("/api/auth", authRoutes);
+app.use("/api/admin", adminRoutes);
 
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
+  console.log(
+    `Backend API sunucusu http://localhost:${PORT} üzerinde çalışıyor.`,
+  );
+});
+
+app.listen(PORT, async () => {
+  try {
+    await prisma.$connect();
+    console.log("Veritabanı bağlantısı başarıyla hazırlandı.");
+  } catch (err) {
+    console.error("Veritabanı ilk bağlantı hatası:", err);
+  }
   console.log(
     `Backend API sunucusu http://localhost:${PORT} üzerinde çalışıyor.`,
   );

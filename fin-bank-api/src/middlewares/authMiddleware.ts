@@ -7,7 +7,15 @@ const ACCESS_TOKEN_SECRET =
   "access_secret_key";
 
 export interface AuthRequest extends Request {
-  user?: any;
+  user?: {
+    id: string;
+    username: string;
+    name?: string;
+    surname?: string;
+    email?: string;
+    role?: string;
+    permissions?: string[];
+  };
 }
 
 export const authenticateToken = (
@@ -30,7 +38,27 @@ export const authenticateToken = (
         .status(401)
         .json({ message: "Token geçersiz veya süresi dolmuş." });
     }
-    req.user = user;
+    req.user = user as AuthRequest["user"];
     next();
   });
+};
+// Atomik yetki denetimi (Yönetici her şeye erişebilir)
+export const requirePermission = (requiredPermission: string) => {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return res.status(401).json({ message: "Yetkilendirme başarısız." });
+    }
+
+    const hasAccess =
+      req.user.role === "YONETICI" ||
+      req.user.permissions?.includes(requiredPermission);
+
+    if (!hasAccess) {
+      return res.status(403).json({
+        message: `Bu işlem için yetkiniz bulunmamaktadır. Gereken yetki: ${requiredPermission}`,
+      });
+    }
+
+    next();
+  };
 };

@@ -3,10 +3,15 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-//  Render'daki REDIS_URL varsa doğrudan URL ile bağlanır
-//  Yoksa yereldeki REDIS_HOST / REDIS_PORT veya localhost'a döner
-const redis = process.env.REDIS_URL
-  ? new Redis(process.env.REDIS_URL)
+const redisUrl = process.env.REDIS_URL;
+
+const redis = redisUrl
+  ? new Redis(redisUrl, {
+      tls: redisUrl.startsWith("rediss://")
+        ? { rejectUnauthorized: false }
+        : undefined,
+      maxRetriesPerRequest: 3,
+    })
   : new Redis({
       host: process.env.REDIS_HOST || "127.0.0.1",
       port: Number(process.env.REDIS_PORT) || 6379,

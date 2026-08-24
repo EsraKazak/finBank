@@ -7,14 +7,6 @@ generator client {
   provider = "prisma-client-js"
 }
 
-enum Role {
-  YONETICI
-  SUBE_MUDURU
-  MUSTERI_ILISKILERI_YONETICISI
-  MUSTERI_ILISKILERI_ASISTANI
-  GISE_YETKILISI
-}
-
 enum WhitelistStatus {
   PENDING
   COMPLETED
@@ -25,7 +17,6 @@ model AuthorizedPersonnel {
   email     String          @unique
   name      String
   surname   String
-  role      Role            @default(GISE_YETKILISI)
   status    WhitelistStatus @default(PENDING)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
@@ -34,15 +25,73 @@ model AuthorizedPersonnel {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  name      String
-  surname   String
-  username  String   @unique
-  email     String   @unique
-  password  String   @default("")
-  role      Role     @default(GISE_YETKILISI)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id              String           @id @default(uuid())
+  name            String
+  surname         String
+  username        String           @unique
+  email           String           @unique
+  password        String
+  userRole        UserRole?
+  userPermissions UserPermission[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@map("users")
+}
+
+model Role {
+  id              String           @id @default(uuid())
+  name            String           @unique
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("roles")
+}
+
+model Permission {
+  id              String           @id @default(uuid())
+  code            String           @unique
+  rolePermissions RolePermission[]
+  userPermissions UserPermission[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@map("permissions")
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  roleId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserPermission {
+  id           String     @id @default(uuid())
+  userId       String
+  permissionId String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([userId, permissionId])
+  @@map("user_permissions")
 }
