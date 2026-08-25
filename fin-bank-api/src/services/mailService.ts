@@ -31,15 +31,17 @@ export class MailService {
     return data.access_token;
   }
 
-  // Merkezi Gönderim Metodu (Gmail REST API - Port Kısıtlamasından Etkilenmez)
+  // Merkezi Gönderim Metodu (Spam Korumalı Multipart/Alternative Formatı)
   private static async send({
     to,
     subject,
+    text,
     html,
     senderTitle = "Bilgilendirme",
   }: {
     to: string;
     subject: string;
+    text: string;
     html: string;
     senderTitle?: string;
   }) {
@@ -49,19 +51,35 @@ export class MailService {
       );
 
       const accessToken = await this.getAccessToken();
+      const senderEmail = process.env.SMTP_USER || process.env.EMAIL_USER;
+      const boundary = `====_FinBank_Boundary_${Date.now()}_====`;
 
-      // RFC 2822 Standartlarında E-posta Başlığı ve Gövdesi
       const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString("base64")}?=`;
+
       const messageParts = [
-        `From: "FinBank ${senderTitle}" <${process.env.SMTP_USER}>`,
+        // 1. Banka taklidi uyarısını önlemek için başlığı doğrudan adınızla veya sadece mail ile verin:
+        `From: "Esra Kazak" <${senderEmail}>`,
         `To: ${to}`,
+        `Reply-To: ${senderEmail}`,
         `Subject: ${utf8Subject}`,
         "MIME-Version: 1.0",
-        "Content-Type: text/html; charset=utf-8",
+        `Content-Type: multipart/alternative; boundary="${boundary}"`,
+        "",
+        `--${boundary}`,
+        "Content-Type: text/plain; charset=UTF-8",
+        "Content-Transfer-Encoding: 7bit",
+        "",
+        text,
+        "",
+        `--${boundary}`,
+        "Content-Type: text/html; charset=UTF-8",
         "Content-Transfer-Encoding: 7bit",
         "",
         html,
+        "",
+        `--${boundary}--`,
       ];
+
       const message = messageParts.join("\r\n");
 
       // Web-Safe Base64 Formatı
@@ -107,21 +125,23 @@ export class MailService {
     username: string,
     rawPassword: string,
   ) {
+    const textContent = `Sayın ${fullName},\n\nFinBank Personel Portalı hesabınız oluşturulmuştur.\nKullanıcı Adınız: ${username}\nGeçici Şifreniz: ${rawPassword}\n\nGiriş yapmak için: ${this.clientUrl}/login`;
+
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 550px; margin: auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
-        <h2 style="color: #1976d2; margin-top: 0; text-align: center;">FinBank Ailesine Hoş Geldiniz!</h2>
+        <h2 style="color: #0a192f; margin-top: 0; text-align: center;">FinBank Ailesine Hoş Geldiniz!</h2>
         <p style="font-size: 15px; color: #333;">Sayın <strong>${fullName}</strong>,</p>
         <p style="font-size: 14px; color: #555; line-height: 1.5;">
           FinBank Personel Yönetim Portalı hesabınız başarıyla oluşturulmuştur. Sisteme giriş yapabileceğiniz hesap bilgileriniz aşağıda yer almaktadır:
         </p>
         
         <div style="background-color: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 16px; margin: 20px 0;">
-          <p style="margin: 6px 0; font-size: 14px; color: #333;"><strong>Kullanıcı Adı:</strong> <span style="color: #1976d2;">${username}</span></p>
-          <p style="margin: 6px 0; font-size: 14px; color: #333;"><strong>Geçici Şifre:</strong> <span style="color: #d32f2f; font-family: monospace; font-size: 15px;">${rawPassword}</span></p>
+          <p style="margin: 6px 0; font-size: 14px; color: #333;"><strong>Kullanıcı Adı:</strong> <span style="color: #0a192f; font-weight: bold;">${username}</span></p>
+          <p style="margin: 6px 0; font-size: 14px; color: #333;"><strong>Geçici Şifre:</strong> <span style="color: #d32f2f; font-family: monospace; font-size: 15px; font-weight: bold;">${rawPassword}</span></p>
         </div>
 
         <div style="text-align: center; margin: 25px 0;">
-          <a href="${this.clientUrl}/login" style="background-color: #1976d2; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">
+          <a href="${this.clientUrl}/login" style="background-color: #0a192f; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">
             Portala Giriş Yap
           </a>
         </div>
@@ -134,7 +154,8 @@ export class MailService {
 
     return await this.send({
       to: toEmail,
-      subject: "FinBank - Hesabınız Oluşturuldu",
+      subject: "FinBank - Personel Hesabınız Oluşturuldu",
+      text: textContent,
       html: htmlContent,
       senderTitle: "Bilgilendirme",
     });
@@ -147,16 +168,17 @@ export class MailService {
     name: string,
   ) {
     const resetLink = `${this.clientUrl}/reset-password?token=${resetToken}`;
+    const textContent = `Merhaba ${name},\n\nHesabınız için şifre sıfırlama talebinde bulundunuz. Yeni şifre belirlemek için şu linke tıklayınız: ${resetLink}\n\nBu bağlantı 15 dakika geçerlidir.`;
 
     const htmlContent = `
       <div style="font-family: Arial, sans-serif; max-width: 550px; margin: auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
-        <h2 style="color: #1976d2; margin-top: 0;">FinBank Personel Portalı</h2>
+        <h2 style="color: #0a192f; margin-top: 0;">FinBank Personel Portalı</h2>
         <p style="font-size: 15px; color: #333;">Merhaba <strong>${name}</strong>,</p>
         <p style="font-size: 14px; color: #555; line-height: 1.5;">
           Hesabınız için şifre sıfırlama talebinde bulundunuz. Yeni bir şifre belirlemek için aşağıdaki butona tıklayabilirsiniz:
         </p>
         <div style="text-align: center; margin: 30px 0;">
-          <a href="${resetLink}" style="background-color: #1976d2; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">
+          <a href="${resetLink}" style="background-color: #0a192f; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">
             Şifremi Sıfırla
           </a>
         </div>
@@ -168,13 +190,13 @@ export class MailService {
 
     return await this.send({
       to: toEmail,
-      subject: "FinBank - Şifre Sıfırlama Bağlantısı",
+      subject: "FinBank - Şifre Sıfırlama Talebi",
+      text: textContent,
       html: htmlContent,
-      senderTitle: "Destek",
+      senderTitle: "Güvenlik",
     });
   }
 
-  // Kayıt Davet E-postası
   // Kayıt Davet E-postası
   static async sendInvitationEmail(
     toEmail: string,
@@ -183,39 +205,41 @@ export class MailService {
     setupToken: string,
   ) {
     const setupLink = `${this.clientUrl}/setup-password?token=${setupToken}`;
+    const textContent = `Sayın ${fullName},\n\nFinBank Personel Portalı hesabınız tanımlanmıştır.\nKullanıcı Adınız: ${username}\n\nHesabınızı aktifleştirmek ve şifrenizi belirlemek için: ${setupLink}\n\nBu bağlantı 24 saat geçerlidir.`;
 
     const htmlContent = `
-    <div style="font-family: Arial, sans-serif; max-width: 550px; margin: auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
-      <h2 style="color: #1976d2; margin-top: 0; text-align: center;">FinBank Ailesine Hoş Geldiniz!</h2>
-      <p style="font-size: 15px; color: #333;">Sayın <strong>${fullName}</strong>,</p>
-      <p style="font-size: 14px; color: #555; line-height: 1.5;">
-        FinBank Personel Yönetim Portalı hesabınız tanımlanmıştır. Sisteme giriş yaparken kullanacağınız kurumsal kullanıcı adınız aşağıda belirtilmiştir:
-      </p>
+      <div style="font-family: Arial, sans-serif; max-width: 550px; margin: auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 10px; background-color: #ffffff;">
+        <h2 style="color: #0a192f; margin-top: 0; text-align: center;">FinBank Ailesine Hoş Geldiniz!</h2>
+        <p style="font-size: 15px; color: #333;">Sayın <strong>${fullName}</strong>,</p>
+        <p style="font-size: 14px; color: #555; line-height: 1.5;">
+          FinBank Personel Yönetim Portalı hesabınız tanımlanmıştır. Sisteme giriş yaparken kullanacağınız kurumsal kullanıcı adınız aşağıda belirtilmiştir:
+        </p>
 
-      <div style="background-color: #f0f7ff; border: 1px solid #cce3ff; border-radius: 8px; padding: 14px; margin: 18px 0; text-align: center;">
-        <span style="font-size: 13px; color: #555;">Kullanıcı Adınız:</span>
-        <div style="font-size: 18px; font-weight: bold; color: #0a192f; letter-spacing: 0.5px; margin-top: 4px;">${username}</div>
+        <div style="background-color: #f0f7ff; border: 1px solid #cce3ff; border-radius: 8px; padding: 14px; margin: 18px 0; text-align: center;">
+          <span style="font-size: 13px; color: #555;">Kullanıcı Adınız:</span>
+          <div style="font-size: 18px; font-weight: bold; color: #0a192f; letter-spacing: 0.5px; margin-top: 4px;">${username}</div>
+        </div>
+
+        <p style="font-size: 14px; color: #555; line-height: 1.5;">
+          Hesabınızı aktif hale getirmek ve giriş şifrenizi oluşturmak için aşağıdaki bağlantıyı kullanabilirsiniz:
+        </p>
+
+        <div style="text-align: center; margin: 25px 0;">
+          <a href="${setupLink}" style="background-color: #0a192f; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">
+            Hesabımı Aktifleştir & Şifre Oluştur
+          </a>
+        </div>
+
+        <p style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 12px;">
+          Bu bağlantı <strong>24 saat</strong> boyunca geçerlidir.
+        </p>
       </div>
-
-      <p style="font-size: 14px; color: #555; line-height: 1.5;">
-        Hesabınızı aktif hale getirmek ve giriş şifrenizi oluşturmak için aşağıdaki bağlantıyı kullanabilirsiniz:
-      </p>
-
-      <div style="text-align: center; margin: 25px 0;">
-        <a href="${setupLink}" style="background-color: #1976d2; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 14px;">
-          Hesabımı Aktifleştir & Şifre Oluştur
-        </a>
-      </div>
-
-      <p style="font-size: 12px; color: #888; border-top: 1px solid #eee; padding-top: 12px;">
-        Bu bağlantı <strong>24 saat</strong> boyunca geçerlidir.
-      </p>
-    </div>
-  `;
+    `;
 
     return await this.send({
       to: toEmail,
       subject: "FinBank - Personel Hesabı Aktivasyonu",
+      text: textContent,
       html: htmlContent,
       senderTitle: "Hesap Aktivasyonu",
     });

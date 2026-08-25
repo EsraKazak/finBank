@@ -1,6 +1,7 @@
+// src/pages/dashboard/RolesPage.tsx
 import React from "react";
-import { PersonnelManagement } from "../../features/admin/PersonnelManagement";
+import { RolePermissionMatrix } from "../../features/admin/RolePermissionMatrix";
 
 export const RolesPage: React.FC = () => {
-  return <PersonnelManagement viewMode="roles" />;
+  return <RolePermissionMatrix />;
 };

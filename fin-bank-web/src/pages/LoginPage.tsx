@@ -328,7 +328,7 @@ export const LoginPage: React.FC = () => {
               size="small"
               id="register-username"
               label="Kullanıcı Adı (Sistem Tarafından Oluşturulur)"
-              value={generatedUsername || "Ad ve soyada göre atanacaktır"}
+              value={generatedUsername}
               disabled
               sx={{
                 mb: 1.5,
