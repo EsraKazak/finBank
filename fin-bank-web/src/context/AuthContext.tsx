@@ -1,4 +1,3 @@
-// src/context/AuthContext.tsx
 import React, { createContext, useState, useEffect } from "react";
 import {
   type User,
@@ -14,24 +13,45 @@ export const AuthContext = createContext<AuthContextType | undefined>(
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  // 1. İLK RENDER ANINDA DOĞRUDAN LOCALSTORAGE'DAN OKU (Yarış durumunu önler)
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const savedUser = localStorage.getItem("user");
-      return savedUser ? JSON.parse(savedUser) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const [accessToken, setAccessToken] = useState<string | null>(() => {
-    return localStorage.getItem("accessToken");
-  });
+  // SAYFA AÇILDIĞINDA VEYA YENİLENDİĞİNDE OTURUMU DOĞRULA
+  useEffect(() => {
+    const initializeAuth = async () => {
+      const storedToken = localStorage.getItem("accessToken");
 
-  // Token varsa doğrulama tamamlanana kadar isLoading true kalsın
-  const [isLoading, setIsLoading] = useState<boolean>(() => {
-    return !!localStorage.getItem("accessToken");
-  });
+      if (!storedToken) {
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        setAccessToken(storedToken);
+        const response = await api.get<{ user: User }>("/auth/me");
+        const currentUser =
+          (response.data as any).data?.user ||
+          (response.data as any).data ||
+          response.data.user ||
+          response.data;
+
+        setUser(currentUser);
+        localStorage.setItem("user", JSON.stringify(currentUser));
+      } catch (error) {
+        console.warn("Geçersiz oturum, yerel veriler temizleniyor.");
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("refreshToken");
+        localStorage.removeItem("user");
+        setUser(null);
+        setAccessToken(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeAuth();
+  }, []);
 
   // GİRİŞ YAPMA
   const login = async (username: string, pass: string): Promise<void> => {
@@ -41,7 +61,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     });
 
     const data = response.data as any;
-
     const resolvedUser: User = data.user ||
       data.data?.user ||
       (data.id ? (data as User) : null) || {
@@ -65,7 +84,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   // ÇIKIŞ YAPMA
-  // Çıkış işleminde sadece logout endpoint'ini çağırmak yeterlidir:
   const logout = async () => {
     try {
       await api.post("/auth/logout");
@@ -73,41 +91,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       console.warn("Backend çıkış isteğinde hata:", error);
     } finally {
       localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
       localStorage.removeItem("user");
       setUser(null);
       setAccessToken(null);
+      window.location.href = "/login";
     }
   };
-
-  // SAYFA YENİLENDİĞİNDE ARKA PLANDA TOKEN DOĞRULAMA
-  useEffect(() => {
-    const initializeAuth = async () => {
-      const storedToken = localStorage.getItem("accessToken");
-
-      if (!storedToken) {
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const response = await api.get<{ user: User }>("/auth/me");
-        const currentUser = response.data.user || (response.data as any);
-        setUser(currentUser);
-        localStorage.setItem("user", JSON.stringify(currentUser));
-      } catch (error) {
-        console.warn("Oturum doğrulanamadı, yerel veriler temizleniyor.");
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("refreshToken");
-        localStorage.removeItem("user");
-        setUser(null);
-        setAccessToken(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initializeAuth();
-  }, []);
 
   return (
     <AuthContext.Provider

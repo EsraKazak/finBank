@@ -1,7 +1,6 @@
 import axios from "axios";
 import type { IAdminUserItem, IRole, IPermission } from "../types/auth.types";
 
-// Canlı ortamda (Render) VITE_API_BASE_URL kullanılır, yerelde localhost'a döner
 const BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
@@ -32,43 +31,36 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => {
-    return Promise.reject(error);
-  },
+  (error) => Promise.reject(error),
 );
 
 api.interceptors.response.use(
-  (response) => {
-    return response;
-  },
+  (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // KRİTİK NOKTA: İstek login isteğiyse refresh token döngüsüne sokma ve sayfayı yenileme!
-    // Hatayı doğrudan LoginPage'deki catch bloğuna ilet.
-    if (originalRequest?.url?.includes("/auth/login")) {
+    // Login veya me isteğinde refresh döngüsüne girmeden hatayı fırlat
+    if (
+      originalRequest?.url?.includes("/auth/login") ||
+      originalRequest?.url?.includes("/auth/me")
+    ) {
       return Promise.reject(error);
     }
 
-    // Login dışındaki korumalı isteklerde 401 alındıysa token yenilemeyi dene
+    // Diğer korumalı isteklerde 401 alındıysa refresh token dene
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
 
       try {
         const refreshToken = localStorage.getItem("refreshToken");
+        if (!refreshToken) throw new Error("Refresh token yok.");
 
-        if (!refreshToken) {
-          throw new Error("Refresh token bulunamadı.");
-        }
-
-        // Burada da sabit localhost yerine dinamik BASE_URL kullanıyoruz
         const response = await axios.post<{ accessToken: string }>(
           `${BASE_URL}/auth/refresh`,
           { refreshToken },
         );
 
         const { accessToken } = response.data;
-
         localStorage.setItem("accessToken", accessToken);
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
 
@@ -76,8 +68,8 @@ api.interceptors.response.use(
       } catch (refreshError) {
         localStorage.removeItem("accessToken");
         localStorage.removeItem("refreshToken");
+        localStorage.removeItem("user");
 
-        // Sadece oturumu gerçekten düşmüş kullanıcıyı login'e at
         if (window.location.pathname !== "/login") {
           window.location.href = "/login";
         }
@@ -101,29 +93,26 @@ export const loginUser = async (
 };
 
 export const adminApi = {
-  // 1. Personeli Beyaz Listeye Davet Etme (Role olmadan)
   addAuthorizedPersonnel: async (data: {
     name: string;
     surname: string;
     email: string;
+    roleId: string;
   }) => {
     const response = await api.post("/auth/authorized-personnel", data);
     return response.data;
   },
 
-  // 2. Beyaz Listedeki Davetleri Getirme
   getAuthorizedPersonnelList: async () => {
     const response = await api.get("/auth/authorized-personnel");
     return response.data;
   },
 
-  // 3. Kayıt Olmuş Tüm Kullanıcıları ve Mevcut Rollerini Listeleme
   getUsers: async () => {
     const response = await api.get<{ data: IAdminUserItem[] }>("/admin/users");
     return response.data.data;
   },
 
-  // 4. Sistemdeki Tüm Rolleri ve İzinleri Getirme
   getRolesAndPermissions: async () => {
     const response = await api.get<{
       data: { roles: IRole[]; permissions: IPermission[] };
@@ -131,7 +120,6 @@ export const adminApi = {
     return response.data.data;
   },
 
-  // 5. Kayıtlı Personele Rol Atama / Güncelleme
   assignRole: async (userId: string, roleId: string) => {
     const response = await api.post("/admin/assign-role", { userId, roleId });
     return response.data;

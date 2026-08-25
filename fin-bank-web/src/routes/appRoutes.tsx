@@ -1,9 +1,10 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { LoginPage } from "../pages/LoginPage";
-import { DashboardPage } from "../pages/DashboardPage";
+import { DashboardPage } from "../pages/DashboardLayout";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { ProtectedRoute } from "./ProtectedRoute";
 import { PublicRoute } from "./PublicRoute";
+import { RoleGuard } from "./RoleGuard";
 import { ForgotPasswordPage } from "../pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "../pages/ResetPasswordPage";
 import { SetupPasswordPage } from "../pages/SetupPasswordPage";
@@ -19,7 +20,7 @@ import { EndOfDayPage } from "../pages/dashboard/EndOfDayPage";
 import { AuditPage } from "../pages/dashboard/AuditPage";
 
 export const router = createBrowserRouter([
-  // 1. Sadece Giriş Yapmamışlara Açık Alan
+  // 1. Sadece Giriş Yapmamışlara Açık Alan (Public)
   {
     element: <PublicRoute />,
     children: [
@@ -42,7 +43,7 @@ export const router = createBrowserRouter([
     ],
   },
 
-  // 2. Giriş Yapmış Kullanıcılara Özel Korumalı Alan
+  // 2. Giriş Yapmış Kullanıcılara Özel Korumalı Alan (Protected + Role Guard)
   {
     element: <ProtectedRoute />,
     children: [
@@ -50,37 +51,80 @@ export const router = createBrowserRouter([
         path: "/dashboard",
         element: <DashboardPage />,
         children: [
+          // Ortak Ana Sayfa (Tüm personeller erişebilir)
           {
-            index: true, // /dashboard adresine gelince açılır
+            index: true,
             element: <OverviewPage />,
           },
+
+          // Sadece Yönetici / Personel Yönetimi Yetkisi Olanlar
           {
-            path: "whitelist", // /dashboard/whitelist
-            element: <WhitelistPage />,
+            element: <RoleGuard requiredPermission="personel:yonetimi" />,
+            children: [
+              {
+                path: "whitelist",
+                element: <WhitelistPage />,
+              },
+              {
+                path: "roles",
+                element: <RolesPage />,
+              },
+            ],
           },
+
+          // Müşteri Yönetimi Yetkisi
           {
-            path: "roles", // /dashboard/roles
-            element: <RolesPage />,
+            element: <RoleGuard requiredPermission="musteri:goruntule" />,
+            children: [
+              {
+                path: "customers",
+                element: <CustomersPage />,
+              },
+            ],
           },
+
+          // Gişe İşlemleri Yetkisi
           {
-            path: "customers", // /dashboard/customers
-            element: <CustomersPage />,
+            element: <RoleGuard requiredPermission="para:yatirma" />,
+            children: [
+              {
+                path: "cashier",
+                element: <CashierPage />,
+              },
+            ],
           },
+
+          // Onay Yetkisi (Şube Müdürü vb.)
           {
-            path: "cashier", // /dashboard/cashier
-            element: <CashierPage />,
+            element: <RoleGuard requiredPermission="islem:limit_ustu:onay" />,
+            children: [
+              {
+                path: "approvals",
+                element: <ApprovalsPage />,
+              },
+            ],
           },
+
+          // Gün Sonu Mutabakatı
           {
-            path: "approvals", // /dashboard/approvals
-            element: <ApprovalsPage />,
+            element: <RoleGuard requiredPermission="sube:gun_sonu:kapatma" />,
+            children: [
+              {
+                path: "eod",
+                element: <EndOfDayPage />,
+              },
+            ],
           },
+
+          // Denetim & Loglar
           {
-            path: "eod", // /dashboard/eod
-            element: <EndOfDayPage />,
-          },
-          {
-            path: "audit", // /dashboard/audit
-            element: <AuditPage />,
+            element: <RoleGuard requiredPermission="denetim:kayit:goruntule" />,
+            children: [
+              {
+                path: "audit",
+                element: <AuditPage />,
+              },
+            ],
           },
         ],
       },
