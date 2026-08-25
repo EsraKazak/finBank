@@ -15,11 +15,61 @@ const REFRESH_TOKEN_SECRET =
   process.env.JWT_REFRESH_SECRET || "refresh_secret_key";
 
 class AuthService {
-  // Yöneticinin whitelist'e personel eklemesi (Role bilgisi olmadan)
+  // Türkçe karakterleri temizleyen ve standart formata getiren yardımcı
+  private cleanTurkishChars(str: string): string {
+    const trMap: { [key: string]: string } = {
+      ç: "c",
+      Ç: "c",
+      ğ: "g",
+      Ğ: "g",
+      ı: "i",
+      İ: "i",
+      ö: "o",
+      Ö: "o",
+      ş: "s",
+      Ş: "s",
+      ü: "u",
+      Ü: "u",
+    };
+    return str
+      .replace(/[çÇğĞıİöÖşŞüÜ]/g, (match) => trMap[match] || match)
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "");
+  }
+
+  // Benzersiz kurumsal kullanıcı adı üreten yardımcı (mgenc, mgenc1, mgenc2...)
+  private async generateUniqueUsername(
+    name: string,
+    surname: string,
+  ): Promise<string> {
+    const cleanName = this.cleanTurkishChars(name.trim());
+    const cleanSurname = this.cleanTurkishChars(surname.trim());
+
+    if (!cleanName || !cleanSurname) {
+      throw new Error("Geçerli bir ad ve soyad girilmelidir.");
+    }
+
+    const firstLetter = cleanName.charAt(0);
+    const baseUsername = `${firstLetter}${cleanSurname}`;
+
+    let candidate = baseUsername;
+    let counter = 1;
+
+    // Veritabanında kontrol et, çakışma varsa sonuna sayaç ekle
+    while (await userRepository.findByUsername(candidate)) {
+      candidate = `${baseUsername}${counter}`;
+      counter++;
+    }
+
+    return candidate;
+  }
+
+  // Yöneticinin whitelist'e personel eklemesi
   async addAuthorizedPersonnel(data: {
     name: string;
     surname: string;
     email: string;
+    roleId: string;
   }) {
     const existing = await userRepository.findAuthorizedEmail(data.email);
     if (existing) {
@@ -31,13 +81,8 @@ class AuthService {
     return await userRepository.createAuthorizedPersonnel(data);
   }
 
-  // Kullanıcı kaydı (Kayıt anında rol atanmaz, boş bırakılır)
-  async register(userData: {
-    name: string;
-    surname: string;
-    username: string;
-    email: string;
-  }) {
+  // Kullanıcı Kaydı (Kayıt olunca rol otomatik UserRole tablosuna işlenir)
+  async register(userData: { name: string; surname: string; email: string }) {
     const authorized = await userRepository.findAuthorizedEmail(userData.email);
     if (!authorized) {
       throw new Error(
@@ -51,50 +96,53 @@ class AuthService {
       );
     }
 
-    const existingUser = await userRepository.findByUsername(userData.username);
-    if (existingUser) {
-      throw new Error("Bu kullanıcı adı zaten kullanılmaktadır.");
-    }
-
     const existingEmail = await userRepository.findByEmail(userData.email);
     if (existingEmail) {
       throw new Error("Bu e-posta adresiyle zaten aktif bir kullanıcı mevcut.");
     }
 
-    // Kullanıcı role olmadan oluşturulur
+    // Benzersiz kurumsal kullanıcı adı
+    const generatedUsername = await this.generateUniqueUsername(
+      userData.name,
+      userData.surname,
+    );
+
+    // 1. Kullanıcıyı oluştur
     const newUser = await userRepository.createUser({
       name: userData.name,
       surname: userData.surname,
-      username: userData.username,
+      username: generatedUsername,
       email: userData.email,
       password: "",
     });
 
+    // 2. Beyaz listede önceden belirlenen rolü UserRole tablosuna ekle
+    await userRepository.assignRoleToUser(newUser.id, authorized.roleId);
+
     const setupToken = crypto.randomBytes(32).toString("hex");
 
     try {
-      const setResult = await redis.set(
+      await redis.set(
         `reset_token:${setupToken}`,
         newUser.username,
         "EX",
         86400,
-      );
-      console.log(
-        `[Register] Token Redis'e yazıldı mı?: ${setResult} (Token: ${setupToken} -> User: ${newUser.username})`,
       );
 
       const fullName = `${newUser.name} ${newUser.surname}`;
       await MailService.sendInvitationEmail(
         newUser.email,
         fullName,
+        newUser.username,
         setupToken,
       );
+
+      // Beyaz liste durumunu tamamlandı olarak işaretle
       await userRepository.markAuthorizedAsCompleted(userData.email);
     } catch (mailError: any) {
       await userRepository.deleteUser(newUser.id).catch(() => {});
       await redis.del(`reset_token:${setupToken}`).catch(() => {});
-      console.error("Kayıt geri alındı hatası:", mailError);
-      throw new Error("E-posta gönderimi veya önbellek kaydı başarısız oldu.");
+      throw new Error("E-posta gönderimi başarısız oldu.");
     }
 
     return {
@@ -103,13 +151,11 @@ class AuthService {
       surname: newUser.surname,
       username: newUser.username,
       email: newUser.email,
-      role: null,
-      message:
-        "Kayıt başarılı. Şifrenizi belirledikten sonra yöneticinin rol ataması yapması gerekmektedir.",
+      role: authorized.role.name,
+      message: "Personel kaydı başarıyla tamamlandı.",
     };
   }
 
-  // Yardımcı: Kullanıcının Rol ve İzinlerini Veritabanından Dinamik Toplar
   private async resolveUserPermissions(userId: string) {
     const userRoleRecord = await userRepository.getUserRole(userId);
     if (!userRoleRecord) {
@@ -119,19 +165,15 @@ class AuthService {
     }
 
     const roleName = userRoleRecord.role.name;
-
-    // Rolün getirdiği yetkiler
     const rolePermissions = await userRepository.getRolePermissions(
       userRoleRecord.roleId,
     );
     const rolePermCodes = rolePermissions.map((rp) => rp.permission.code);
 
-    // Kullanıcıya özel atanmış ekstra yetkiler
     const extraPermissions =
       await userRepository.getUserSpecificPermissions(userId);
     const extraPermCodes = extraPermissions.map((up) => up.permission.code);
 
-    // Birleştirilmiş tekil yetki listesi
     const permissions = Array.from(
       new Set([...rolePermCodes, ...extraPermCodes]),
     );
@@ -139,7 +181,6 @@ class AuthService {
     return { roleName, permissions };
   }
 
-  // Login: Veritabanı üzerinden rol ve yetki kontrolü
   async login(username: string, password: string): Promise<IAuthResponse> {
     const user = await userRepository.findByUsername(username);
     if (!user || !user.password) {
@@ -153,7 +194,6 @@ class AuthService {
       throw new Error("Hatalı şifre girdiniz.");
     }
 
-    // Dinamik rol ve yetkileri çöz
     const { roleName, permissions } = await this.resolveUserPermissions(
       user.id,
     );
@@ -266,7 +306,6 @@ class AuthService {
     await MailService.sendPasswordResetEmail(user.email, resetToken, user.name);
   }
 
-  // resetPassword metodu:
   async resetPassword(token: string, newPassword: string): Promise<void> {
     if (!token) {
       throw new Error("Geçersiz veya eksik token.");
@@ -274,9 +313,6 @@ class AuthService {
 
     const cleanToken = token.trim();
     const username = await redis.get(`reset_token:${cleanToken}`);
-
-    console.log(`[ResetPassword] Aranan Token: ${cleanToken}`);
-    console.log(`[ResetPassword] Redis'ten Okunan Kullanıcı: ${username}`);
 
     if (!username) {
       throw new Error("Bağlantının süresi dolmuş veya geçersiz.");

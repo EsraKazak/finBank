@@ -5,11 +5,11 @@ class AuthController {
   // Yönetici tarafından beyaz listeye personel tanımlama
   async addAuthorizedPersonnel(req: Request, res: Response) {
     try {
-      const { name, surname, email } = req.body;
+      const { name, surname, email, roleId } = req.body;
 
-      if (!name || !surname || !email) {
+      if (!name || !surname || !email || !roleId) {
         return res.status(400).json({
-          message: "Ad, soyad ve e-posta alanları zorunludur.",
+          message: "Ad, soyad, e-posta ve rol seçimi zorunludur.",
         });
       }
 
@@ -17,6 +17,7 @@ class AuthController {
         name,
         surname,
         email,
+        roleId,
       });
 
       return res.status(201).json({
@@ -40,19 +41,17 @@ class AuthController {
 
   async register(req: Request, res: Response) {
     try {
-      const { name, surname, username, email } = req.body;
+      const { name, surname, email } = req.body;
 
-      if (!name || !surname || !username || !email) {
+      if (!name || !surname || !email) {
         return res.status(400).json({
-          message:
-            "Lütfen ad, soyad, kullanıcı adı ve e-posta alanlarını doldurun.",
+          message: "Lütfen ad, soyad ve e-posta alanlarını doldurun.",
         });
       }
 
       const newUser = await authService.register({
         name,
         surname,
-        username,
         email,
       });
 

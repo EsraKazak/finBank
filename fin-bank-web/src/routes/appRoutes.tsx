@@ -8,6 +8,16 @@ import { ForgotPasswordPage } from "../pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "../pages/ResetPasswordPage";
 import { SetupPasswordPage } from "../pages/SetupPasswordPage";
 
+// Dashboard Alt Sayfaları
+import { OverviewPage } from "../pages/dashboard/OverviewPage";
+import { WhitelistPage } from "../pages/dashboard/WhitelistPage";
+import { RolesPage } from "../pages/dashboard/RolesPage";
+import { CustomersPage } from "../pages/dashboard/CustomersPage";
+import { CashierPage } from "../pages/dashboard/CashierPage";
+import { ApprovalsPage } from "../pages/dashboard/ApprovalsPage";
+import { EndOfDayPage } from "../pages/dashboard/EndOfDayPage";
+import { AuditPage } from "../pages/dashboard/AuditPage";
+
 export const router = createBrowserRouter([
   // 1. Sadece Giriş Yapmamışlara Açık Alan
   {
@@ -39,6 +49,40 @@ export const router = createBrowserRouter([
       {
         path: "/dashboard",
         element: <DashboardPage />,
+        children: [
+          {
+            index: true, // /dashboard adresine gelince açılır
+            element: <OverviewPage />,
+          },
+          {
+            path: "whitelist", // /dashboard/whitelist
+            element: <WhitelistPage />,
+          },
+          {
+            path: "roles", // /dashboard/roles
+            element: <RolesPage />,
+          },
+          {
+            path: "customers", // /dashboard/customers
+            element: <CustomersPage />,
+          },
+          {
+            path: "cashier", // /dashboard/cashier
+            element: <CashierPage />,
+          },
+          {
+            path: "approvals", // /dashboard/approvals
+            element: <ApprovalsPage />,
+          },
+          {
+            path: "eod", // /dashboard/eod
+            element: <EndOfDayPage />,
+          },
+          {
+            path: "audit", // /dashboard/audit
+            element: <AuditPage />,
+          },
+        ],
       },
     ],
   },

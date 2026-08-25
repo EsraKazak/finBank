@@ -3,362 +3,304 @@ import {
   Box,
   Paper,
   Typography,
-  TextField,
   Button,
   Table,
+  TableBody,
+  TableCell,
+  TableContainer,
   TableHead,
   TableRow,
-  TableCell,
-  TableBody,
+  Chip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  FormControl,
+  InputLabel,
   Select,
   MenuItem,
-  Chip,
-  Alert,
-  Stack,
   CircularProgress,
-  IconButton,
-  Tooltip,
+  Alert,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
-import CheckOutlinedIcon from "@mui/icons-material/CheckOutlined";
-import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
+import api from "../../services/api";
 
-import { adminApi } from "../../services/api";
-import type { IAdminUserItem, IRole } from "../../types/auth.types";
-
-interface Props {
-  viewMode: "whitelist" | "roles";
+interface Role {
+  id: string;
+  name: string;
 }
 
-export const PersonnelManagement: React.FC<Props> = ({ viewMode }) => {
-  // Form State (Beyaz Liste İçin)
+interface AuthorizedPersonnel {
+  id: string;
+  name: string;
+  surname: string;
+  email: string;
+  roleId: string;
+  role?: Role;
+  status: "PENDING" | "COMPLETED";
+  createdAt: string;
+}
+
+const roleDisplayNames: Record<string, string> = {
+  YONETICI: "Sistem Yöneticisi",
+  SUBE_MUDURU: "Şube Müdürü",
+  MUSTERI_ILISKILERI_YONETICISI: "Müşteri İlişkileri Yöneticisi",
+  MUSTERI_ILISKILERI_ASISTANI: "Müşteri İlişkileri Asistanı",
+  GISE_YETKILISI: "Gişe Yetkilisi",
+};
+
+export const PersonnelManagement: React.FC<{
+  viewMode: "whitelist" | "roles";
+}> = ({ viewMode }) => {
+  const [list, setList] = useState<AuthorizedPersonnel[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [openModal, setOpenModal] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
     name: "",
     surname: "",
     email: "",
+    roleId: "",
   });
-  const [feedback, setFeedback] = useState<{
-    type: "success" | "error";
-    text: string;
-  } | null>(null);
 
-  // Tablo & Rol State
-  const [users, setUsers] = useState<IAdminUserItem[]>([]);
-  const [roles, setRoles] = useState<IRole[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Düzenleme Satır State'leri (Hangi kullanıcı düzenleniyor & Seçilen Geçici Rol)
-  const [editingUserId, setEditingUserId] = useState<string | null>(null);
-  const [selectedRoleId, setSelectedRoleId] = useState<string>("");
-  const [savingUserId, setSavingUserId] = useState<string | null>(null);
-
-  const loadData = async () => {
+  const fetchData = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const [usersData, metaData] = await Promise.all([
-        adminApi.getUsers(),
-        adminApi.getRolesAndPermissions(),
+      const [listRes, rolesRes] = await Promise.all([
+        api.get("/auth/authorized-personnel"),
+        api.get("/admin/roles"),
       ]);
-      setUsers(usersData || []);
-      setRoles(metaData?.roles || []);
+
+      // Beyaz liste kayıtları
+      setList(listRes.data.data || []);
+
+      // Gelen veri { roles: [...] } şeklinde mi yoksa doğrudan dizi mi kontrolü:
+      const rolesData =
+        rolesRes.data.data?.roles || rolesRes.data.data || rolesRes.data || [];
+      setRoles(rolesData);
     } catch (err: any) {
-      setFeedback({
-        type: "error",
-        text: err.response?.data?.message || "Veriler yüklenirken hata oluştu.",
-      });
+      setError("Veriler yüklenirken bir hata oluştu.");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
-    setEditingUserId(null);
-  }, [viewMode]);
+    fetchData();
+  }, []);
 
-  // Beyaz Listeye Personel Ekle
-  const handleAddWhitelist = async (e: React.FormEvent) => {
+  const handleAddPersonnel = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFeedback(null);
     try {
-      await adminApi.addAuthorizedPersonnel(formData);
-      setFeedback({
-        type: "success",
-        text: "Personel başarıyla davet listesine eklendi.",
-      });
-      setFormData({ name: "", surname: "", email: "" });
+      await api.post("/auth/authorized-personnel", formData);
+      setOpenModal(false);
+      setFormData({ name: "", surname: "", email: "", roleId: "" });
+      fetchData();
     } catch (err: any) {
-      setFeedback({
-        type: "error",
-        text: err.response?.data?.message || "Ekleme başarısız.",
-      });
-    }
-  };
-
-  // Düzenleme Modunu Başlat
-  const handleStartEdit = (user: IAdminUserItem) => {
-    setEditingUserId(user.id);
-    setSelectedRoleId(user.userRole?.role?.id || "");
-  };
-
-  // Düzenlemeyi İptal Et
-  const handleCancelEdit = () => {
-    setEditingUserId(null);
-    setSelectedRoleId("");
-  };
-
-  // Rol Değişikliğini Onaylayıp Kaydet
-  const handleSaveRole = async (userId: string) => {
-    if (!selectedRoleId) {
-      setFeedback({ type: "error", text: "Lütfen geçerli bir rol seçiniz." });
-      return;
-    }
-
-    try {
-      setSavingUserId(userId);
-      await adminApi.assignRole(userId, selectedRoleId);
-      setFeedback({ type: "success", text: "Rol başarıyla güncellendi." });
-      setEditingUserId(null);
-      await loadData();
-    } catch (err: any) {
-      setFeedback({
-        type: "error",
-        text: err.response?.data?.message || "Rol atanamadı.",
-      });
-    } finally {
-      setSavingUserId(null);
+      alert(err.response?.data?.message || "Ekleme başarısız.");
     }
   };
 
   return (
-    <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      {feedback && (
-        <Alert severity={feedback.type} onClose={() => setFeedback(null)}>
-          {feedback.text}
+    <Box>
+      <Box
+        sx={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          mb: 3,
+        }}
+      >
+        <Typography variant="h6" sx={{ fontWeight: 800, color: "#0a192f" }}>
+          {viewMode === "whitelist"
+            ? "Yetkilendirilmiş Personel Davet Listesi"
+            : "Rol & Yetki Listesi"}
+        </Typography>
+        {viewMode === "whitelist" && (
+          <Button
+            variant="contained"
+            startIcon={<PersonAddIcon />}
+            onClick={() => setOpenModal(true)}
+            sx={{
+              borderRadius: 2,
+              background: "linear-gradient(135deg, #1976d2 0%, #0d47a1 100%)",
+              textTransform: "none",
+              fontWeight: 700,
+            }}
+          >
+            Yeni Personel Davet Et
+          </Button>
+        )}
+      </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
         </Alert>
       )}
 
-      {/* 1. SAYFA: SADECE BEYAZ LİSTE (DAVET) */}
-      {viewMode === "whitelist" && (
-        <Paper
-          elevation={0}
-          sx={{
-            p: 3.5,
-            borderRadius: 3.5,
-            border: "1px solid #edf2f7",
-            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.04)",
-          }}
-        >
-          <Typography
-            variant="h6"
-            sx={{ fontWeight: 800, color: "#0a192f" }}
-            gutterBottom
-          >
-            Personel Davet Listesi
-          </Typography>
-          <Typography variant="body2" sx={{ color: "text.secondary", mb: 3 }}>
-            Sisteme kayıt olmasına izin verilecek personelleri listeye ekleyin.
-          </Typography>
-
-          <form onSubmit={handleAddWhitelist}>
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <TextField
-                label="Ad"
-                size="small"
-                required
-                fullWidth
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-              />
-              <TextField
-                label="Soyad"
-                size="small"
-                required
-                fullWidth
-                value={formData.surname}
-                onChange={(e) =>
-                  setFormData({ ...formData, surname: e.target.value })
-                }
-              />
-              <TextField
-                label="Kurumsal E-posta"
-                type="email"
-                size="small"
-                required
-                fullWidth
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
-              />
-              <Button
-                type="submit"
-                variant="contained"
-                startIcon={<PersonAddIcon />}
-                sx={{
-                  minWidth: 170,
-                  borderRadius: 2,
-                  textTransform: "none",
-                  fontWeight: 700,
-                }}
-              >
-                Listeye Ekle
-              </Button>
-            </Stack>
-          </form>
-        </Paper>
-      )}
-
-      {/* 2. SAYFA: PERSONEL VE ROL YÖNETİM TABLOSU */}
-      {viewMode === "roles" && (
-        <Paper
-          elevation={0}
-          sx={{
-            p: 3.5,
-            borderRadius: 3.5,
-            border: "1px solid #edf2f7",
-            boxShadow: "0 10px 30px rgba(0, 0, 0, 0.04)",
-          }}
-        >
-          <Typography
-            variant="h6"
-            sx={{ fontWeight: 800, color: "#0a192f" }}
-            gutterBottom
-          >
-            Kayıtlı Personeller ve Rol Yönetimi
-          </Typography>
-          <Typography variant="body2" sx={{ color: "text.secondary", mb: 2 }}>
-            Kayıt olmuş personellerin rollerini düzenlemek için "Düzenle"
-            butonunu kullanın.
-          </Typography>
-
-          {loading ? (
-            <Box sx={{ display: "flex", justifyContent: "center", p: 4 }}>
-              <CircularProgress size={32} />
-            </Box>
-          ) : (
-            <Table>
-              <TableHead>
+      <Paper
+        elevation={0}
+        sx={{
+          borderRadius: 3,
+          border: "1px solid #e2e8f0",
+          overflow: "hidden",
+        }}
+      >
+        <TableContainer>
+          <Table>
+            <TableHead sx={{ bgcolor: "#f8fafc" }}>
+              <TableRow>
+                <TableCell sx={{ fontWeight: 700 }}>Ad Soyad</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Kurumsal E-posta</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Tanımlanan Rol</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Kayıt Durumu</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Davet Tarihi</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loading ? (
                 <TableRow>
-                  <TableCell>
-                    <strong>Personel</strong>
-                  </TableCell>
-                  <TableCell>
-                    <strong>Kullanıcı Adı</strong>
-                  </TableCell>
-                  <TableCell>
-                    <strong>E-posta</strong>
-                  </TableCell>
-                  <TableCell>
-                    <strong>Mevcut Rol</strong>
-                  </TableCell>
-                  <TableCell align="right">
-                    <strong>İşlemler</strong>
+                  <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
+                    <CircularProgress size={28} />
                   </TableCell>
                 </TableRow>
-              </TableHead>
-              <TableBody>
-                {users.map((u) => {
-                  const isEditing = editingUserId === u.id;
-                  const isSaving = savingUserId === u.id;
+              ) : list.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    align="center"
+                    sx={{ py: 3, color: "text.secondary" }}
+                  >
+                    Henüz davet edilmiş personel kaydı bulunmuyor.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                list.map((item) => (
+                  <TableRow key={item.id} hover>
+                    <TableCell
+                      sx={{ fontWeight: 600 }}
+                    >{`${item.name} ${item.surname}`}</TableCell>
+                    <TableCell>{item.email}</TableCell>
+                    <TableCell>
+                      <Chip
+                        label={
+                          item.role?.name
+                            ? roleDisplayNames[item.role.name] || item.role.name
+                            : "Rol Seçilmedi"
+                        }
+                        size="small"
+                        sx={{
+                          bgcolor: "#e3f2fd",
+                          color: "#1976d2",
+                          fontWeight: 700,
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={
+                          item.status === "COMPLETED"
+                            ? "Kayıt Tamamlandı"
+                            : "Aktivasyon Bekliyor"
+                        }
+                        size="small"
+                        color={
+                          item.status === "COMPLETED" ? "success" : "warning"
+                        }
+                        variant="outlined"
+                        sx={{ fontWeight: 600 }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {new Date(item.createdAt).toLocaleDateString("tr-TR")}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Paper>
 
-                  return (
-                    <TableRow key={u.id} hover>
-                      <TableCell>
-                        {u.name} {u.surname}
-                      </TableCell>
-                      <TableCell>@{u.username}</TableCell>
-                      <TableCell>{u.email}</TableCell>
-                      <TableCell>
-                        {isEditing ? (
-                          <Select
-                            size="small"
-                            value={selectedRoleId}
-                            onChange={(e) => setSelectedRoleId(e.target.value)}
-                            sx={{ minWidth: 190, borderRadius: 2 }}
-                          >
-                            <MenuItem value="" disabled>
-                              <em>Rol Seçiniz</em>
-                            </MenuItem>
-                            {roles.map((r) => (
-                              <MenuItem key={r.id} value={r.id}>
-                                {r.name}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        ) : u.userRole?.role ? (
-                          <Chip
-                            label={u.userRole.role.name}
-                            color="primary"
-                            size="small"
-                            sx={{ fontWeight: 600 }}
-                          />
-                        ) : (
-                          <Chip
-                            label="Rol Atanmadı"
-                            color="warning"
-                            size="small"
-                            sx={{ fontWeight: 600 }}
-                          />
-                        )}
-                      </TableCell>
-                      <TableCell align="right">
-                        {isEditing ? (
-                          <Stack
-                            direction="row"
-                            spacing={1}
-                            sx={{ justifyContent: "flex-end" }}
-                          >
-                            <Button
-                              size="small"
-                              variant="contained"
-                              color="success"
-                              startIcon={<CheckOutlinedIcon />}
-                              disabled={isSaving}
-                              onClick={() => handleSaveRole(u.id)}
-                              sx={{ textTransform: "none", borderRadius: 2 }}
-                            >
-                              {isSaving ? "Kaydediliyor..." : "Kaydet"}
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color="inherit"
-                              startIcon={<CloseOutlinedIcon />}
-                              disabled={isSaving}
-                              onClick={handleCancelEdit}
-                              sx={{ textTransform: "none", borderRadius: 2 }}
-                            >
-                              İptal
-                            </Button>
-                          </Stack>
-                        ) : (
-                          <Tooltip title="Rolü Düzenle">
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              onClick={() => handleStartEdit(u)}
-                              sx={{
-                                border: "1px solid #e2e8f0",
-                                borderRadius: 2,
-                              }}
-                            >
-                              <EditOutlinedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </Paper>
-      )}
+      {/* ROL SEÇİMLİ PERSONEL EKLEME MODALI */}
+      <Dialog
+        open={openModal}
+        onClose={() => setOpenModal(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: "#0a192f" }}>
+          Yeni Personel Daveti Oluştur
+        </DialogTitle>
+        <Box component="form" onSubmit={handleAddPersonnel}>
+          <DialogContent
+            sx={{ display: "flex", flexDirection: "column", gap: 2, pt: 1 }}
+          >
+            <TextField
+              label="Ad"
+              required
+              fullWidth
+              size="small"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData({ ...formData, name: e.target.value })
+              }
+            />
+            <TextField
+              label="Soyad"
+              required
+              fullWidth
+              size="small"
+              value={formData.surname}
+              onChange={(e) =>
+                setFormData({ ...formData, surname: e.target.value })
+              }
+            />
+            <TextField
+              label="Kurumsal E-posta"
+              type="email"
+              required
+              fullWidth
+              size="small"
+              value={formData.email}
+              onChange={(e) =>
+                setFormData({ ...formData, email: e.target.value })
+              }
+            />
+
+            {/* Rol Seçim Dropdown */}
+            <FormControl required fullWidth size="small">
+              <InputLabel id="role-select-label">Rol Tanımla</InputLabel>
+              <Select
+                labelId="role-select-label"
+                label="Rol Tanımla"
+                value={formData.roleId}
+                onChange={(e) =>
+                  setFormData({ ...formData, roleId: e.target.value })
+                }
+              >
+                {roles.map((role) => (
+                  <MenuItem key={role.id} value={role.id}>
+                    {roleDisplayNames[role.name] || role.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </DialogContent>
+          <DialogActions sx={{ p: 2.5, pt: 0 }}>
+            <Button onClick={() => setOpenModal(false)} color="inherit">
+              İptal
+            </Button>
+            <Button type="submit" variant="contained" sx={{ fontWeight: 700 }}>
+              Daveti Kaydet
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
     </Box>
   );
 };

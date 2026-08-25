@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   Box,
   Drawer,
@@ -12,16 +13,15 @@ import {
   ListItemText,
   Divider,
   Avatar,
-  Chip,
   Button,
   Container,
-  Paper,
   IconButton,
   Tooltip,
-  Stack,
 } from "@mui/material";
 
 // İkonlar
+import MenuIcon from "@mui/icons-material/Menu";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import DashboardOutlinedIcon from "@mui/icons-material/DashboardOutlined";
 import PersonAddAltOutlinedIcon from "@mui/icons-material/PersonAddAltOutlined";
 import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
@@ -31,30 +31,18 @@ import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import LockClockOutlinedIcon from "@mui/icons-material/LockClockOutlined";
 import PolicyOutlinedIcon from "@mui/icons-material/PolicyOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
-import ShieldOutlinedIcon from "@mui/icons-material/ShieldOutlined";
-import EmailOutlinedIcon from "@mui/icons-material/EmailOutlined";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import NotificationsNoneOutlinedIcon from "@mui/icons-material/NotificationsNoneOutlined";
-import VpnKeyOutlinedIcon from "@mui/icons-material/VpnKeyOutlined";
 
 import { useAuth } from "../hooks/useAuth";
-import { PersonnelManagement } from "../features/admin/PersonnelManagement";
 
-const DRAWER_WIDTH = 270;
-
-type ActiveTab =
-  | "overview"
-  | "whitelist"
-  | "roles"
-  | "customers"
-  | "cashier"
-  | "approvals"
-  | "eod"
-  | "audit";
+const DRAWER_EXPANDED = 260;
+const DRAWER_COLLAPSED = 72;
 
 export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<ActiveTab>("overview");
+  const [open, setOpen] = useState(true);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const displayName =
     `${user?.name || ""} ${user?.surname || ""}`.trim() ||
@@ -78,361 +66,521 @@ export const DashboardPage: React.FC = () => {
   const userRole =
     (primaryRole && roleLabels[primaryRole]) || primaryRole || "Rol Atanmadı";
   const userPermissions: string[] = user?.permissions || [];
-
-  // Yetki Kontrol Yardımcısı
   const hasPerm = (perm: string) => userPermissions.includes(perm);
+
+  // Başlık belirleme
+  const getPageTitle = () => {
+    switch (location.pathname) {
+      case "/dashboard":
+        return "Genel Bakış";
+      case "/dashboard/whitelist":
+        return "Beyaz Liste Personel Daveti";
+      case "/dashboard/roles":
+        return "Personel & Rol Yönetimi";
+      case "/dashboard/customers":
+        return "Müşteri ve Hesap Yönetimi";
+      case "/dashboard/cashier":
+        return "Gişe Para Yatırma / Çekme";
+      case "/dashboard/approvals":
+        return "Limit Üstü İşlem Onayları";
+      case "/dashboard/eod":
+        return "Şube Gün Sonu Kapatma";
+      case "/dashboard/audit":
+        return "Denetim ve Log Kayıtları";
+      default:
+        return "FinBank Portal";
+    }
+  };
+
+  const currentWidth = open ? DRAWER_EXPANDED : DRAWER_COLLAPSED;
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "#f4f7fb" }}>
-      {/* 1. SOL SIDEBAR */}
+      {/* 1. SOL COLLAPSIBLE SIDEBAR */}
       <Drawer
         variant="permanent"
         sx={{
-          width: DRAWER_WIDTH,
+          width: currentWidth,
           flexShrink: 0,
+          whiteSpace: "nowrap",
+          boxSizing: "border-box",
           "& .MuiDrawer-paper": {
-            width: DRAWER_WIDTH,
-            boxSizing: "border-box",
+            width: currentWidth,
+            transition: "width 0.22s ease-in-out",
+            overflowX: "hidden",
             bgcolor: "#0a192f",
             color: "#ffffff",
             borderRight: "none",
           },
         }}
       >
-        {/* Logo */}
-        <Box sx={{ p: 2.5, display: "flex", alignItems: "center", gap: 1.5 }}>
-          <Box
-            component="img"
-            src="/favicon.ico"
-            alt="Logo"
-            onError={(e: any) => (e.currentTarget.style.display = "none")}
-            sx={{ width: 32, height: 32, borderRadius: 1.5 }}
-          />
-          <Typography
-            variant="h6"
-            sx={{ fontWeight: 800, color: "#64ffda", letterSpacing: 0.5 }}
+        {/* Logo & Toggle */}
+        <Box
+          sx={{
+            p: 2,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: open ? "space-between" : "center",
+            minHeight: 64,
+          }}
+        >
+          {open && (
+            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+              <Box
+                component="img"
+                src="/favicon.ico"
+                alt="Logo"
+                onError={(e: any) => (e.currentTarget.style.display = "none")}
+                sx={{ width: 30, height: 30, borderRadius: 1.5 }}
+              />
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 800, color: "#64ffda", fontSize: "1.05rem" }}
+              >
+                FinBank Portal
+              </Typography>
+            </Box>
+          )}
+
+          <IconButton
+            onClick={() => setOpen(!open)}
+            sx={{ color: "#64ffda" }}
+            size="small"
           >
-            FinBank Portal
-          </Typography>
+            {open ? <ChevronLeftIcon /> : <MenuIcon />}
+          </IconButton>
         </Box>
 
         <Divider sx={{ borderColor: "rgba(255,255,255,0.08)" }} />
 
-        {/* Menü Öğeleri */}
-        <List sx={{ px: 1.5, py: 2 }}>
-          {/* Genel Bakış (Herkese Açık) */}
-          <ListItem disablePadding sx={{ mb: 0.8 }}>
-            <ListItemButton
-              selected={activeTab === "overview"}
-              onClick={() => setActiveTab("overview")}
-              sx={{
-                borderRadius: 2,
-                "&.Mui-selected": { bgcolor: "#172a45", color: "#64ffda" },
-                "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
-              }}
-            >
-              <ListItemIcon
+        {/* Menü Listesi */}
+        <List sx={{ px: 1, py: 2 }}>
+          {/* Genel Bakış */}
+          <Tooltip title={!open ? "Genel Bakış" : ""} placement="right">
+            <ListItem disablePadding sx={{ mb: 0.8 }}>
+              <ListItemButton
+                selected={location.pathname === "/dashboard"}
+                onClick={() => navigate("/dashboard")}
                 sx={{
-                  color: activeTab === "overview" ? "#64ffda" : "grey.400",
-                  minWidth: 40,
+                  borderRadius: 2,
+                  justifyContent: open ? "initial" : "center",
+                  px: 2,
+                  "&.Mui-selected": { bgcolor: "#172a45", color: "#64ffda" },
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
                 }}
               >
-                <DashboardOutlinedIcon />
-              </ListItemIcon>
-              <ListItemText
-                primary={
-                  <Typography sx={{ fontSize: "0.9rem", fontWeight: 600 }}>
-                    Genel Bakış
-                  </Typography>
-                }
-              />
-            </ListItemButton>
-          </ListItem>
+                <ListItemIcon
+                  sx={{
+                    color:
+                      location.pathname === "/dashboard"
+                        ? "#64ffda"
+                        : "grey.400",
+                    minWidth: open ? 40 : "auto",
+                    mr: open ? 1 : "auto",
+                  }}
+                >
+                  <DashboardOutlinedIcon />
+                </ListItemIcon>
+                {open && (
+                  <ListItemText
+                    primary={
+                      <Typography sx={{ fontSize: "0.88rem", fontWeight: 600 }}>
+                        Genel Bakış
+                      </Typography>
+                    }
+                  />
+                )}
+              </ListItemButton>
+            </ListItem>
+          </Tooltip>
 
           {/* YÖNETİCİ MENÜLERİ */}
           {hasPerm("personel:yonetimi") && (
             <>
-              <Typography
-                variant="caption"
-                sx={{
-                  px: 2,
-                  py: 1,
-                  display: "block",
-                  color: "grey.500",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                }}
+              {open && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    px: 2,
+                    py: 1,
+                    display: "block",
+                    color: "grey.500",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Personel Yönetimi
+                </Typography>
+              )}
+
+              <Tooltip title={!open ? "Davet Listesi" : ""} placement="right">
+                <ListItem disablePadding sx={{ mb: 0.8 }}>
+                  <ListItemButton
+                    selected={location.pathname === "/dashboard/whitelist"}
+                    onClick={() => navigate("/dashboard/whitelist")}
+                    sx={{
+                      borderRadius: 2,
+                      justifyContent: open ? "initial" : "center",
+                      px: 2,
+                      "&.Mui-selected": {
+                        bgcolor: "#172a45",
+                        color: "#64ffda",
+                      },
+                      "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
+                    }}
+                  >
+                    <ListItemIcon
+                      sx={{
+                        color:
+                          location.pathname === "/dashboard/whitelist"
+                            ? "#64ffda"
+                            : "grey.400",
+                        minWidth: open ? 40 : "auto",
+                        mr: open ? 1 : "auto",
+                      }}
+                    >
+                      <PersonAddAltOutlinedIcon />
+                    </ListItemIcon>
+                    {open && (
+                      <ListItemText
+                        primary={
+                          <Typography
+                            sx={{ fontSize: "0.88rem", fontWeight: 600 }}
+                          >
+                            Davet Listesi
+                          </Typography>
+                        }
+                      />
+                    )}
+                  </ListItemButton>
+                </ListItem>
+              </Tooltip>
+
+              <Tooltip
+                title={!open ? "Rol & Yetki Yönetimi" : ""}
+                placement="right"
               >
-                Personel Yönetimi
-              </Typography>
-
-              <ListItem disablePadding sx={{ mb: 0.8 }}>
-                <ListItemButton
-                  selected={activeTab === "whitelist"}
-                  onClick={() => setActiveTab("whitelist")}
-                  sx={{
-                    borderRadius: 2,
-                    "&.Mui-selected": { bgcolor: "#172a45", color: "#64ffda" },
-                    "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
-                  }}
-                >
-                  <ListItemIcon
+                <ListItem disablePadding sx={{ mb: 0.8 }}>
+                  <ListItemButton
+                    selected={location.pathname === "/dashboard/roles"}
+                    onClick={() => navigate("/dashboard/roles")}
                     sx={{
-                      color: activeTab === "whitelist" ? "#64ffda" : "grey.400",
-                      minWidth: 40,
+                      borderRadius: 2,
+                      justifyContent: open ? "initial" : "center",
+                      px: 2,
+                      "&.Mui-selected": {
+                        bgcolor: "#172a45",
+                        color: "#64ffda",
+                      },
+                      "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
                     }}
                   >
-                    <PersonAddAltOutlinedIcon />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={
-                      <Typography sx={{ fontSize: "0.9rem", fontWeight: 600 }}>
-                        Davet Listesi
-                      </Typography>
-                    }
-                  />
-                </ListItemButton>
-              </ListItem>
-
-              <ListItem disablePadding sx={{ mb: 0.8 }}>
-                <ListItemButton
-                  selected={activeTab === "roles"}
-                  onClick={() => setActiveTab("roles")}
-                  sx={{
-                    borderRadius: 2,
-                    "&.Mui-selected": { bgcolor: "#172a45", color: "#64ffda" },
-                    "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
-                  }}
-                >
-                  <ListItemIcon
-                    sx={{
-                      color: activeTab === "roles" ? "#64ffda" : "grey.400",
-                      minWidth: 40,
-                    }}
-                  >
-                    <ManageAccountsOutlinedIcon />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={
-                      <Typography sx={{ fontSize: "0.9rem", fontWeight: 600 }}>
-                        Rol & Yetki Yönetimi
-                      </Typography>
-                    }
-                  />
-                </ListItemButton>
-              </ListItem>
+                    <ListItemIcon
+                      sx={{
+                        color:
+                          location.pathname === "/dashboard/roles"
+                            ? "#64ffda"
+                            : "grey.400",
+                        minWidth: open ? 40 : "auto",
+                        mr: open ? 1 : "auto",
+                      }}
+                    >
+                      <ManageAccountsOutlinedIcon />
+                    </ListItemIcon>
+                    {open && (
+                      <ListItemText
+                        primary={
+                          <Typography
+                            sx={{ fontSize: "0.88rem", fontWeight: 600 }}
+                          >
+                            Rol & Yetki Yönetimi
+                          </Typography>
+                        }
+                      />
+                    )}
+                  </ListItemButton>
+                </ListItem>
+              </Tooltip>
             </>
           )}
 
-          {/* BANKACILIK & OPERASYON MENÜLERİ (Yetkiye Göre Dinamik Çıkar) */}
+          {/* BANKA OPERASYONLARI */}
           {(hasPerm("musteri:goruntule") ||
             hasPerm("para:yatirma") ||
             hasPerm("islem:limit_ustu:onay") ||
             hasPerm("sube:gun_sonu:kapatma") ||
             hasPerm("denetim:kayit:goruntule")) && (
             <>
-              <Typography
-                variant="caption"
-                sx={{
-                  px: 2,
-                  py: 1,
-                  display: "block",
-                  color: "grey.500",
-                  fontWeight: 700,
-                  textTransform: "uppercase",
-                }}
-              >
-                Banka Operasyonları
-              </Typography>
+              {open && (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    px: 2,
+                    py: 1,
+                    display: "block",
+                    color: "grey.500",
+                    fontWeight: 700,
+                    textTransform: "uppercase",
+                    mt: 1,
+                  }}
+                >
+                  Banka Operasyonları
+                </Typography>
+              )}
 
-              {/* Müşteri İşlemleri */}
               {hasPerm("musteri:goruntule") && (
-                <ListItem disablePadding sx={{ mb: 0.8 }}>
-                  <ListItemButton
-                    selected={activeTab === "customers"}
-                    onClick={() => setActiveTab("customers")}
-                    sx={{
-                      borderRadius: 2,
-                      "&.Mui-selected": {
-                        bgcolor: "#172a45",
-                        color: "#64ffda",
-                      },
-                      "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
-                    }}
-                  >
-                    <ListItemIcon
+                <Tooltip
+                  title={!open ? "Müşteri Yönetimi" : ""}
+                  placement="right"
+                >
+                  <ListItem disablePadding sx={{ mb: 0.8 }}>
+                    <ListItemButton
+                      selected={location.pathname === "/dashboard/customers"}
+                      onClick={() => navigate("/dashboard/customers")}
                       sx={{
-                        color:
-                          activeTab === "customers" ? "#64ffda" : "grey.400",
-                        minWidth: 40,
+                        borderRadius: 2,
+                        justifyContent: open ? "initial" : "center",
+                        px: 2,
+                        "&.Mui-selected": {
+                          bgcolor: "#172a45",
+                          color: "#64ffda",
+                        },
+                        "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
                       }}
                     >
-                      <PeopleAltOutlinedIcon />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography
-                          sx={{ fontSize: "0.9rem", fontWeight: 600 }}
-                        >
-                          Müşteri Yönetimi
-                        </Typography>
-                      }
-                    />
-                  </ListItemButton>
-                </ListItem>
+                      <ListItemIcon
+                        sx={{
+                          color:
+                            location.pathname === "/dashboard/customers"
+                              ? "#64ffda"
+                              : "grey.400",
+                          minWidth: open ? 40 : "auto",
+                          mr: open ? 1 : "auto",
+                        }}
+                      >
+                        <PeopleAltOutlinedIcon />
+                      </ListItemIcon>
+                      {open && (
+                        <ListItemText
+                          primary={
+                            <Typography
+                              sx={{ fontSize: "0.88rem", fontWeight: 600 }}
+                            >
+                              Müşteri Yönetimi
+                            </Typography>
+                          }
+                        />
+                      )}
+                    </ListItemButton>
+                  </ListItem>
+                </Tooltip>
               )}
 
-              {/* Gişe / Para Yatırma - Çekme */}
               {(hasPerm("para:yatirma") || hasPerm("para:cekme")) && (
-                <ListItem disablePadding sx={{ mb: 0.8 }}>
-                  <ListItemButton
-                    selected={activeTab === "cashier"}
-                    onClick={() => setActiveTab("cashier")}
-                    sx={{
-                      borderRadius: 2,
-                      "&.Mui-selected": {
-                        bgcolor: "#172a45",
-                        color: "#64ffda",
-                      },
-                      "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
-                    }}
-                  >
-                    <ListItemIcon
+                <Tooltip
+                  title={!open ? "Gişe & Kasa İşlemleri" : ""}
+                  placement="right"
+                >
+                  <ListItem disablePadding sx={{ mb: 0.8 }}>
+                    <ListItemButton
+                      selected={location.pathname === "/dashboard/cashier"}
+                      onClick={() => navigate("/dashboard/cashier")}
                       sx={{
-                        color: activeTab === "cashier" ? "#64ffda" : "grey.400",
-                        minWidth: 40,
+                        borderRadius: 2,
+                        justifyContent: open ? "initial" : "center",
+                        px: 2,
+                        "&.Mui-selected": {
+                          bgcolor: "#172a45",
+                          color: "#64ffda",
+                        },
+                        "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
                       }}
                     >
-                      <PointOfSaleOutlinedIcon />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography
-                          sx={{ fontSize: "0.9rem", fontWeight: 600 }}
-                        >
-                          Gişe & Kasa İşlemleri
-                        </Typography>
-                      }
-                    />
-                  </ListItemButton>
-                </ListItem>
+                      <ListItemIcon
+                        sx={{
+                          color:
+                            location.pathname === "/dashboard/cashier"
+                              ? "#64ffda"
+                              : "grey.400",
+                          minWidth: open ? 40 : "auto",
+                          mr: open ? 1 : "auto",
+                        }}
+                      >
+                        <PointOfSaleOutlinedIcon />
+                      </ListItemIcon>
+                      {open && (
+                        <ListItemText
+                          primary={
+                            <Typography
+                              sx={{ fontSize: "0.88rem", fontWeight: 600 }}
+                            >
+                              Gişe & Kasa İşlemleri
+                            </Typography>
+                          }
+                        />
+                      )}
+                    </ListItemButton>
+                  </ListItem>
+                </Tooltip>
               )}
 
-              {/* Limit Üstü Onay (Müdür / Yönetici) */}
               {hasPerm("islem:limit_ustu:onay") && (
-                <ListItem disablePadding sx={{ mb: 0.8 }}>
-                  <ListItemButton
-                    selected={activeTab === "approvals"}
-                    onClick={() => setActiveTab("approvals")}
-                    sx={{
-                      borderRadius: 2,
-                      "&.Mui-selected": {
-                        bgcolor: "#172a45",
-                        color: "#64ffda",
-                      },
-                      "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
-                    }}
-                  >
-                    <ListItemIcon
+                <Tooltip
+                  title={!open ? "Limit Üstü Onaylar" : ""}
+                  placement="right"
+                >
+                  <ListItem disablePadding sx={{ mb: 0.8 }}>
+                    <ListItemButton
+                      selected={location.pathname === "/dashboard/approvals"}
+                      onClick={() => navigate("/dashboard/approvals")}
                       sx={{
-                        color:
-                          activeTab === "approvals" ? "#64ffda" : "grey.400",
-                        minWidth: 40,
+                        borderRadius: 2,
+                        justifyContent: open ? "initial" : "center",
+                        px: 2,
+                        "&.Mui-selected": {
+                          bgcolor: "#172a45",
+                          color: "#64ffda",
+                        },
+                        "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
                       }}
                     >
-                      <FactCheckOutlinedIcon />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography
-                          sx={{ fontSize: "0.9rem", fontWeight: 600 }}
-                        >
-                          Limit Üstü Onaylar
-                        </Typography>
-                      }
-                    />
-                  </ListItemButton>
-                </ListItem>
+                      <ListItemIcon
+                        sx={{
+                          color:
+                            location.pathname === "/dashboard/approvals"
+                              ? "#64ffda"
+                              : "grey.400",
+                          minWidth: open ? 40 : "auto",
+                          mr: open ? 1 : "auto",
+                        }}
+                      >
+                        <FactCheckOutlinedIcon />
+                      </ListItemIcon>
+                      {open && (
+                        <ListItemText
+                          primary={
+                            <Typography
+                              sx={{ fontSize: "0.88rem", fontWeight: 600 }}
+                            >
+                              Limit Üstü Onaylar
+                            </Typography>
+                          }
+                        />
+                      )}
+                    </ListItemButton>
+                  </ListItem>
+                </Tooltip>
               )}
 
-              {/* Gün Sonu Kapatma */}
               {hasPerm("sube:gun_sonu:kapatma") && (
-                <ListItem disablePadding sx={{ mb: 0.8 }}>
-                  <ListItemButton
-                    selected={activeTab === "eod"}
-                    onClick={() => setActiveTab("eod")}
-                    sx={{
-                      borderRadius: 2,
-                      "&.Mui-selected": {
-                        bgcolor: "#172a45",
-                        color: "#64ffda",
-                      },
-                      "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
-                    }}
-                  >
-                    <ListItemIcon
+                <Tooltip
+                  title={!open ? "Gün Sonu Kapatma" : ""}
+                  placement="right"
+                >
+                  <ListItem disablePadding sx={{ mb: 0.8 }}>
+                    <ListItemButton
+                      selected={location.pathname === "/dashboard/eod"}
+                      onClick={() => navigate("/dashboard/eod")}
                       sx={{
-                        color: activeTab === "eod" ? "#64ffda" : "grey.400",
-                        minWidth: 40,
+                        borderRadius: 2,
+                        justifyContent: open ? "initial" : "center",
+                        px: 2,
+                        "&.Mui-selected": {
+                          bgcolor: "#172a45",
+                          color: "#64ffda",
+                        },
+                        "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
                       }}
                     >
-                      <LockClockOutlinedIcon />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography
-                          sx={{ fontSize: "0.9rem", fontWeight: 600 }}
-                        >
-                          Gün Sonu Kapatma
-                        </Typography>
-                      }
-                    />
-                  </ListItemButton>
-                </ListItem>
+                      <ListItemIcon
+                        sx={{
+                          color:
+                            location.pathname === "/dashboard/eod"
+                              ? "#64ffda"
+                              : "grey.400",
+                          minWidth: open ? 40 : "auto",
+                          mr: open ? 1 : "auto",
+                        }}
+                      >
+                        <LockClockOutlinedIcon />
+                      </ListItemIcon>
+                      {open && (
+                        <ListItemText
+                          primary={
+                            <Typography
+                              sx={{ fontSize: "0.88rem", fontWeight: 600 }}
+                            >
+                              Gün Sonu Kapatma
+                            </Typography>
+                          }
+                        />
+                      )}
+                    </ListItemButton>
+                  </ListItem>
+                </Tooltip>
               )}
 
-              {/* Denetim Kayıtları (Loglar) */}
               {hasPerm("denetim:kayit:goruntule") && (
-                <ListItem disablePadding sx={{ mb: 0.8 }}>
-                  <ListItemButton
-                    selected={activeTab === "audit"}
-                    onClick={() => setActiveTab("audit")}
-                    sx={{
-                      borderRadius: 2,
-                      "&.Mui-selected": {
-                        bgcolor: "#172a45",
-                        color: "#64ffda",
-                      },
-                      "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
-                    }}
-                  >
-                    <ListItemIcon
+                <Tooltip
+                  title={!open ? "Denetim İzleri (Logs)" : ""}
+                  placement="right"
+                >
+                  <ListItem disablePadding sx={{ mb: 0.8 }}>
+                    <ListItemButton
+                      selected={location.pathname === "/dashboard/audit"}
+                      onClick={() => navigate("/dashboard/audit")}
                       sx={{
-                        color: activeTab === "audit" ? "#64ffda" : "grey.400",
-                        minWidth: 40,
+                        borderRadius: 2,
+                        justifyContent: open ? "initial" : "center",
+                        px: 2,
+                        "&.Mui-selected": {
+                          bgcolor: "#172a45",
+                          color: "#64ffda",
+                        },
+                        "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
                       }}
                     >
-                      <PolicyOutlinedIcon />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography
-                          sx={{ fontSize: "0.9rem", fontWeight: 600 }}
-                        >
-                          Denetim İzleri (Logs)
-                        </Typography>
-                      }
-                    />
-                  </ListItemButton>
-                </ListItem>
+                      <ListItemIcon
+                        sx={{
+                          color:
+                            location.pathname === "/dashboard/audit"
+                              ? "#64ffda"
+                              : "grey.400",
+                          minWidth: open ? 40 : "auto",
+                          mr: open ? 1 : "auto",
+                        }}
+                      >
+                        <PolicyOutlinedIcon />
+                      </ListItemIcon>
+                      {open && (
+                        <ListItemText
+                          primary={
+                            <Typography
+                              sx={{ fontSize: "0.88rem", fontWeight: 600 }}
+                            >
+                              Denetim İzleri (Logs)
+                            </Typography>
+                          }
+                        />
+                      )}
+                    </ListItemButton>
+                  </ListItem>
+                </Tooltip>
               )}
             </>
           )}
         </List>
 
-        {/* Sidebar Alt Profil */}
-        <Box sx={{ mt: "auto", p: 2, bgcolor: "rgba(0,0,0,0.2)" }}>
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+        {/* Profil Alanı */}
+        <Box sx={{ mt: "auto", p: open ? 2 : 1, bgcolor: "rgba(0,0,0,0.2)" }}>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: open ? "flex-start" : "center",
+              gap: 1.5,
+            }}
+          >
             <Avatar
               sx={{
                 width: 36,
@@ -443,21 +591,23 @@ export const DashboardPage: React.FC = () => {
             >
               {displayName.charAt(0).toUpperCase()}
             </Avatar>
-            <Box sx={{ overflow: "hidden" }}>
-              <Typography
-                variant="body2"
-                noWrap
-                sx={{ fontWeight: 700, color: "#fff" }}
-              >
-                {displayName}
-              </Typography>
-              <Typography
-                variant="caption"
-                sx={{ color: "grey.400", display: "block" }}
-              >
-                {userRole}
-              </Typography>
-            </Box>
+            {open && (
+              <Box sx={{ overflow: "hidden" }}>
+                <Typography
+                  variant="body2"
+                  noWrap
+                  sx={{ fontWeight: 700, color: "#fff" }}
+                >
+                  {displayName}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  sx={{ color: "grey.400", display: "block" }}
+                >
+                  {userRole}
+                </Typography>
+              </Box>
+            )}
           </Box>
         </Box>
       </Drawer>
@@ -471,14 +621,7 @@ export const DashboardPage: React.FC = () => {
         >
           <Toolbar sx={{ justifyContent: "space-between" }}>
             <Typography variant="h6" sx={{ color: "#0a192f", fontWeight: 700 }}>
-              {activeTab === "overview" && "Genel Bakış"}
-              {activeTab === "whitelist" && "Beyaz Liste Personel Daveti"}
-              {activeTab === "roles" && "Personel & Rol Yönetimi"}
-              {activeTab === "customers" && "Müşteri ve Hesap Yönetimi"}
-              {activeTab === "cashier" && "Gişe Para Yatırma / Çekme"}
-              {activeTab === "approvals" && "Limit Üstü İşlem Onayları"}
-              {activeTab === "eod" && "Şube Gün Sonu Kapatma"}
-              {activeTab === "audit" && "Denetim ve Log Kayıtları"}
+              {getPageTitle()}
             </Typography>
 
             <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
@@ -494,7 +637,11 @@ export const DashboardPage: React.FC = () => {
                 size="small"
                 startIcon={<LogoutIcon />}
                 onClick={logout}
-                sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
+                sx={{
+                  borderRadius: 2,
+                  textTransform: "none",
+                  fontWeight: 600,
+                }}
               >
                 Çıkış
               </Button>
@@ -502,309 +649,9 @@ export const DashboardPage: React.FC = () => {
           </Toolbar>
         </AppBar>
 
-        {/* Dinamik Sayfa İçerikleri */}
+        {/* Alt Sayfaların Render Edildiği Alan */}
         <Container maxWidth="lg" sx={{ py: 4, flexGrow: 1 }}>
-          {/* GENEL BAKIŞ & YETKİ ROZETLERİ */}
-          {activeTab === "overview" && (
-            <Stack spacing={3}>
-              <Paper
-                elevation={0}
-                sx={{
-                  borderRadius: 3.5,
-                  overflow: "hidden",
-                  border: "1px solid",
-                  borderColor: "grey.200",
-                  bgcolor: "#ffffff",
-                  boxShadow: "0 10px 30px rgba(0, 0, 0, 0.04)",
-                }}
-              >
-                <Box
-                  sx={{
-                    height: 120,
-                    background:
-                      "linear-gradient(135deg, #0a192f 0%, #172a45 60%, #1976d2 100%)",
-                  }}
-                />
-                <Box sx={{ px: { xs: 2.5, sm: 4 }, pb: 3, pt: 0 }}>
-                  <Box
-                    sx={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "flex-end",
-                      mt: -6,
-                      mb: 2.5,
-                    }}
-                  >
-                    <Avatar
-                      sx={{
-                        width: 96,
-                        height: 96,
-                        bgcolor: "#1976d2",
-                        border: "4px solid #ffffff",
-                        boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
-                        fontSize: "2.2rem",
-                        fontWeight: 700,
-                      }}
-                    >
-                      {displayName.charAt(0).toUpperCase()}
-                    </Avatar>
-
-                    <Chip
-                      icon={<ShieldOutlinedIcon sx={{ fontSize: 16 }} />}
-                      label={userRole}
-                      sx={{
-                        bgcolor: "#e3f2fd",
-                        color: "primary.main",
-                        fontWeight: 700,
-                        px: 1,
-                        py: 0.5,
-                        borderRadius: 2,
-                      }}
-                    />
-                  </Box>
-
-                  <Box sx={{ mb: 3 }}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <Typography
-                        variant="h5"
-                        sx={{ fontWeight: 800, color: "#0a192f" }}
-                      >
-                        {displayName}
-                      </Typography>
-                      <CheckCircleIcon
-                        sx={{ color: "primary.main", fontSize: 20 }}
-                      />
-                    </Box>
-                    {user?.username && (
-                      <Typography
-                        variant="body2"
-                        sx={{ color: "text.secondary", mt: 0.2 }}
-                      >
-                        @{user.username}
-                      </Typography>
-                    )}
-                  </Box>
-
-                  <Divider sx={{ my: 2.5 }} />
-
-                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
-                    <Box
-                      sx={{
-                        flex: "1 1 calc(50% - 16px)",
-                        minWidth: 220,
-                        p: 2,
-                        bgcolor: "#f8fafc",
-                        borderRadius: 2.5,
-                        border: "1px solid #edf2f7",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1.5,
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          p: 1,
-                          borderRadius: 2,
-                          bgcolor: "primary.50",
-                          color: "primary.main",
-                          display: "flex",
-                        }}
-                      >
-                        <EmailOutlinedIcon fontSize="small" />
-                      </Box>
-                      <Box>
-                        <Typography
-                          variant="caption"
-                          sx={{ color: "text.secondary", display: "block" }}
-                        >
-                          Kurumsal E-posta
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          sx={{ fontWeight: 600, color: "#0a192f" }}
-                        >
-                          {user?.email || "Belirtilmemiş"}
-                        </Typography>
-                      </Box>
-                    </Box>
-
-                    <Box
-                      sx={{
-                        flex: "1 1 calc(50% - 16px)",
-                        minWidth: 220,
-                        p: 2,
-                        bgcolor: "#f8fafc",
-                        borderRadius: 2.5,
-                        border: "1px solid #edf2f7",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1.5,
-                      }}
-                    >
-                      <Box
-                        sx={{
-                          p: 1,
-                          borderRadius: 2,
-                          bgcolor: "success.50",
-                          color: "success.main",
-                          display: "flex",
-                        }}
-                      >
-                        <VpnKeyOutlinedIcon fontSize="small" />
-                      </Box>
-                      <Box>
-                        <Typography
-                          variant="caption"
-                          sx={{ color: "text.secondary", display: "block" }}
-                        >
-                          Tanımlı Yetki Sayısı
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          sx={{ fontWeight: 600, color: "success.main" }}
-                        >
-                          {userPermissions.length} Aktif Yetki
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Box>
-                </Box>
-              </Paper>
-
-              {/* SAHİP OLUNAN ATOMİK İZİNLER ROZET ALANI */}
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 3.5,
-                  borderRadius: 3.5,
-                  border: "1px solid #edf2f7",
-                  boxShadow: "0 10px 30px rgba(0, 0, 0, 0.04)",
-                }}
-              >
-                <Typography
-                  variant="h6"
-                  sx={{ fontWeight: 800, color: "#0a192f", mb: 1 }}
-                >
-                  Hesabınıza Tanımlı İzinler (Permissions)
-                </Typography>
-                <Typography
-                  variant="body2"
-                  sx={{ color: "text.secondary", mb: 2.5 }}
-                >
-                  Rolünüzün sağladığı ve bu ekranda işlem yapabileceğiniz yetki
-                  listesi:
-                </Typography>
-
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1 }}>
-                  {userPermissions.length > 0 ? (
-                    userPermissions.map((perm) => (
-                      <Chip
-                        key={perm}
-                        label={perm}
-                        variant="outlined"
-                        color="primary"
-                        sx={{
-                          fontWeight: 600,
-                          bgcolor: "#f0f7ff",
-                          borderRadius: 2,
-                        }}
-                      />
-                    ))
-                  ) : (
-                    <Typography variant="body2" color="warning.main">
-                      Hesabınıza henüz bir rol veya izin tanımlanmamıştır.
-                    </Typography>
-                  )}
-                </Box>
-              </Paper>
-            </Stack>
-          )}
-
-          {/* YÖNETİCİ SEKMELERİ */}
-          {activeTab === "whitelist" && hasPerm("personel:yonetimi") && (
-            <PersonnelManagement viewMode="whitelist" />
-          )}
-
-          {activeTab === "roles" && hasPerm("personel:yonetimi") && (
-            <PersonnelManagement viewMode="roles" />
-          )}
-
-          {/* DİĞER MODÜLLER İÇİN YER TUTUCU SAYFALAR */}
-          {activeTab === "customers" && hasPerm("musteri:goruntule") && (
-            <Paper
-              elevation={0}
-              sx={{ p: 4, borderRadius: 3.5, border: "1px solid #e2e8f0" }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: "bold" }}>
-                Müşteri Portföyü ve Hesap Listesi
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                Müşteri hesapları ve bakiye detayları burada listelenecektir.
-              </Typography>
-            </Paper>
-          )}
-
-          {activeTab === "cashier" &&
-            (hasPerm("para:yatirma") || hasPerm("para:cekme")) && (
-              <Paper
-                elevation={0}
-                sx={{ p: 4, borderRadius: 3.5, border: "1px solid #e2e8f0" }}
-              >
-                <Typography variant="h6" sx={{ fontWeight: "bold" }}>
-                  Gişe Para Yatırma & Çekme Ekranı
-                </Typography>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 1 }}
-                >
-                  Hesaplar arası para transferi ve nakit hareketleri
-                  operasyonları.
-                </Typography>
-              </Paper>
-            )}
-
-          {activeTab === "approvals" && hasPerm("islem:limit_ustu:onay") && (
-            <Paper
-              elevation={0}
-              sx={{ p: 4, borderRadius: 3.5, border: "1px solid #e2e8f0" }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: "bold" }}>
-                Limit Üstü İşlem Onay Masası
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                Gişe yetkililerinin gönderdiği 50.000 TL üstü transfer onayları.
-              </Typography>
-            </Paper>
-          )}
-
-          {activeTab === "eod" && hasPerm("sube:gun_sonu:kapatma") && (
-            <Paper
-              elevation={0}
-              sx={{ p: 4, borderRadius: 3.5, border: "1px solid #e2e8f0" }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: "bold" }}>
-                Şube Gün Sonu Kapanış ve Kasa Mutabakatı
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                Günlük şube kasa bakiyelerini doğrulayıp günü kapatma paneli.
-              </Typography>
-            </Paper>
-          )}
-
-          {activeTab === "audit" && hasPerm("denetim:kayit:goruntule") && (
-            <Paper
-              elevation={0}
-              sx={{ p: 4, borderRadius: 3.5, border: "1px solid #e2e8f0" }}
-            >
-              <Typography variant="h6" sx={{ fontWeight: "bold" }}>
-                Denetim İzleri ve Sistem Logları
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                Sistemde yapılan tüm işlemlerin log geçmişi.
-              </Typography>
-            </Paper>
-          )}
+          <Outlet />
         </Container>
       </Box>
     </Box>

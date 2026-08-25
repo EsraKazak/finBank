@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Paper,
@@ -23,22 +23,49 @@ import { LoginForm } from "../features/auth/LoginForm";
 import { useAuth } from "../hooks/useAuth";
 import api from "../services/api";
 
+const cleanTurkishChars = (str: string) => {
+  const trMap: { [key: string]: string } = {
+    ç: "c",
+    Ç: "c",
+    ğ: "g",
+    Ğ: "g",
+    ı: "i",
+    İ: "i",
+    ö: "o",
+    Ö: "o",
+    ş: "s",
+    Ş: "s",
+    ü: "u",
+    Ü: "u",
+  };
+  return str
+    .replace(/[çÇğĞıİöÖşŞüÜ]/g, (match) => trMap[match] || match)
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+};
+
 export const LoginPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Şifre alanı kaldırıldı
   const [registerForm, setRegisterForm] = useState({
     name: "",
     surname: "",
-    username: "",
     email: "",
   });
 
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  // Ad ve Soyad yazıldıkça mgenc formatında önizleme üretir
+  const generatedUsername = useMemo(() => {
+    const cName = cleanTurkishChars(registerForm.name.trim());
+    const cSurname = cleanTurkishChars(registerForm.surname.trim());
+    if (!cName || !cSurname) return "";
+    return `${cName.charAt(0)}${cSurname}`;
+  }, [registerForm.name, registerForm.surname]);
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -79,9 +106,7 @@ export const LoginPage: React.FC = () => {
       await api.post("/auth/register", {
         name: registerForm.name,
         surname: registerForm.surname,
-        username: registerForm.username,
         email: registerForm.email,
-        role: "BANKO_ASISTANI",
       });
 
       setSuccessMsg(
@@ -90,7 +115,6 @@ export const LoginPage: React.FC = () => {
       setRegisterForm({
         name: "",
         surname: "",
-        username: "",
         email: "",
       });
       setActiveTab(0);
@@ -109,7 +133,6 @@ export const LoginPage: React.FC = () => {
     reason?: string,
   ) => {
     if (reason === "clickaway") return;
-    setError(null);
     setSuccessMsg(null);
   };
 
@@ -191,9 +214,7 @@ export const LoginPage: React.FC = () => {
             variant="fullWidth"
             sx={{
               minHeight: 40,
-              "& .MuiTabs-indicator": {
-                display: "none",
-              },
+              "& .MuiTabs-indicator": { display: "none" },
               "& .MuiTab-root": {
                 minHeight: 40,
                 borderRadius: 2.5,
@@ -250,13 +271,19 @@ export const LoginPage: React.FC = () => {
           </Box>
         )}
 
-        {/* 2. SEKME: ŞİFRESİZ KAYIT FORMU */}
+        {/* 2. SEKME: ŞİFRESİZ VE OTOMATİK KULLANICI ADLI KAYIT FORMU */}
         {activeTab === 1 && (
           <Box
             component="form"
             onSubmit={handleRegisterSubmit}
             sx={{ width: "100%" }}
           >
+            {error && (
+              <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
+                {error}
+              </Alert>
+            )}
+
             <Box sx={{ display: "flex", gap: 1.5, mb: 1.5 }}>
               <TextField
                 required
@@ -294,25 +321,32 @@ export const LoginPage: React.FC = () => {
               />
             </Box>
 
+            {/* Otomatik Üretilen Kullanıcı Adı (Salt Okunur) */}
             <TextField
               margin="dense"
-              required
               fullWidth
               size="small"
               id="register-username"
-              label="Kullanıcı Adı"
-              name="username"
-              value={registerForm.username}
-              onChange={handleRegisterChange}
-              disabled={loading}
-              sx={{ mb: 1.5 }}
+              label="Kullanıcı Adı (Sistem Tarafından Oluşturulur)"
+              value={generatedUsername || "Ad ve soyada göre atanacaktır"}
+              disabled
+              sx={{
+                mb: 1.5,
+                "& .MuiInputBase-input.Mui-disabled": {
+                  WebkitTextFillColor: "#0a192f",
+                  fontWeight: 600,
+                },
+                "& .MuiOutlinedInput-root.Mui-disabled": {
+                  bgcolor: "#f8fafc",
+                },
+              }}
               slotProps={{
                 input: {
                   startAdornment: (
                     <InputAdornment position="start">
                       <PersonIcon
                         fontSize="small"
-                        sx={{ color: "action.active" }}
+                        sx={{ color: "primary.main" }}
                       />
                     </InputAdornment>
                   ),
@@ -377,20 +411,20 @@ export const LoginPage: React.FC = () => {
         )}
       </Paper>
 
-      {/* Toast Bildirimleri */}
+      {/* Sadece Başarılı İşlemlerde Çıkan Tekil Bildirim */}
       <Snackbar
-        open={Boolean(error || successMsg)}
+        open={Boolean(successMsg)}
         autoHideDuration={5000}
         onClose={handleCloseSnackbar}
         anchorOrigin={{ vertical: "top", horizontal: "right" }}
       >
         <Alert
           onClose={handleCloseSnackbar}
-          severity={error ? "error" : "success"}
+          severity="success"
           variant="filled"
           sx={{ width: "100%", borderRadius: 2, boxShadow: 6 }}
         >
-          {error || successMsg}
+          {successMsg}
         </Alert>
       </Snackbar>
     </Box>

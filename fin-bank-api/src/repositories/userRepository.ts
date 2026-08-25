@@ -1,7 +1,6 @@
 import prisma from "../config/prisma";
 
 class UserRepository {
-  // --- Kullanıcı Tablosu İşlemleri ---
   async findByUsername(username: string) {
     return await prisma.user.findUnique({ where: { username } });
   }
@@ -36,32 +35,37 @@ class UserRepository {
   }
 
   async deleteUser(id: string) {
-    return await prisma.user.delete({
-      where: { id },
-    });
+    return await prisma.user.delete({ where: { id } });
   }
 
-  // --- Beyaz Liste (Whitelist) İşlemleri ---
+  // Beyaz Liste İşlemleri (Rol Bilgisi Dahil)
   async findAuthorizedEmail(email: string) {
-    return await prisma.authorizedPersonnel.findUnique({ where: { email } });
+    return await prisma.authorizedPersonnel.findUnique({
+      where: { email },
+      include: { role: true },
+    });
   }
 
   async createAuthorizedPersonnel(data: {
     name: string;
     surname: string;
     email: string;
+    roleId: string;
   }) {
     return await prisma.authorizedPersonnel.create({
       data: {
         name: data.name,
         surname: data.surname,
         email: data.email,
+        roleId: data.roleId,
       },
+      include: { role: true },
     });
   }
 
   async getAuthorizedPersonnelList() {
     return await prisma.authorizedPersonnel.findMany({
+      include: { role: true },
       orderBy: { createdAt: "desc" },
     });
   }
@@ -73,7 +77,6 @@ class UserRepository {
     });
   }
 
-  // --- Dinamik Rol ve İzin Çözümleme İşlemleri ---
   async getUserRole(userId: string) {
     return await prisma.userRole.findUnique({
       where: { userId },
@@ -95,7 +98,6 @@ class UserRepository {
     });
   }
 
-  // --- Yönetici Rol / Yetki Atama İşlemleri ---
   async assignRoleToUser(userId: string, roleId: string) {
     return await prisma.userRole.upsert({
       where: { userId },
@@ -104,21 +106,14 @@ class UserRepository {
     });
   }
 
-  // Tüm rolleri listeleme
   async getAllRoles() {
-    return await prisma.role.findMany({
-      orderBy: { name: "asc" },
-    });
+    return await prisma.role.findMany({ orderBy: { name: "asc" } });
   }
 
-  // Tüm izinleri listeleme
   async getAllPermissions() {
-    return await prisma.permission.findMany({
-      orderBy: { code: "asc" },
-    });
+    return await prisma.permission.findMany({ orderBy: { code: "asc" } });
   }
 
-  // Rolü henüz atanmamış veya atanmış tüm kullanıcıları rolleriyle listeleme
   async getAllUsersWithRoles() {
     return await prisma.user.findMany({
       select: {
@@ -128,26 +123,16 @@ class UserRepository {
         username: true,
         email: true,
         createdAt: true,
-        userRole: {
-          include: { role: true },
-        },
-        userPermissions: {
-          include: { permission: true },
-        },
+        userRole: { include: { role: true } },
+        userPermissions: { include: { permission: true } },
       },
       orderBy: { createdAt: "desc" },
     });
   }
 
-  // Kullanıcıya özel atanmış izinleri toplu güncelleme
   async syncUserPermissions(userId: string, permissionIds: string[]) {
     return await prisma.$transaction(async (tx) => {
-      // 1. Kullanıcının mevcut özel izinlerini temizle
-      await tx.userPermission.deleteMany({
-        where: { userId },
-      });
-
-      // 2. Yeni seçilen izinleri toplu ekle
+      await tx.userPermission.deleteMany({ where: { userId } });
       if (permissionIds.length > 0) {
         await tx.userPermission.createMany({
           data: permissionIds.map((permissionId) => ({
@@ -156,7 +141,6 @@ class UserRepository {
           })),
         });
       }
-
       return tx.userPermission.findMany({
         where: { userId },
         include: { permission: true },
