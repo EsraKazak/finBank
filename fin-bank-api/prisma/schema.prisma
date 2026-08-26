@@ -7,6 +7,9 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// ==========================================
+// 1. MEVCUT ENUM VE MODELLER
+// ==========================================
 enum WhitelistStatus {
   PENDING
   COMPLETED
@@ -38,6 +41,16 @@ model User {
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   notifications   Notification[]
+
+  // Şube İlişkisi: Mevcut verilerin silinmemesi için opsiyonel (Int?)
+  branchId        Int?
+  branch          Branch?          @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  // Audit Log İlişkileri
+  createdCustomers Customer[]      @relation("CustomerCreatedBy")
+  updatedCustomers Customer[]      @relation("CustomerUpdatedBy")
+  createdAccounts  Account[]       @relation("AccountCreatedBy")
+  updatedAccounts  Account[]       @relation("AccountUpdatedBy")
 
   @@map("users")
 }
@@ -121,4 +134,117 @@ model Notification {
 
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+// ==========================================
+// 2. YENİ BANKACILIK ENUMLARI VE MODELLERİ
+// ==========================================
+enum AccountType {
+  DEMAND  // Vadesiz
+  TIME    // Vadeli
+}
+
+enum RenewalType {
+  PRINCIPAL_AND_INTEREST  // Anapara + Faiz uzat
+  PRINCIPAL_ONLY          // Sadece anapara uzat
+  CLOSE                   // Vade sonunda kapat
+}
+
+enum AccountStatus {
+  ACTIVE
+  BLOCKED
+  CLOSED
+}
+
+model Branch {
+  id        Int        @id @default(autoincrement())
+  code      String     @unique @db.VarChar(10) // Örn: "001", "002", "003"
+  name      String     @db.VarChar(100)        // Örn: "Kadıköy Şubesi"
+  city      String     @db.VarChar(50)
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+
+  users     User[]
+  customers Customer[]
+  accounts  Account[]
+
+  @@map("branches")
+}
+
+model Product {
+  id          Int         @id @default(autoincrement())
+  code        String      @unique @db.VarChar(20) // Örn: "TIME-TRY", "DEMAND-TRY"
+  name        String      @db.VarChar(100)
+  type        AccountType
+  currency    String      @db.VarChar(3)          // TRY, USD, EUR
+  minInterest Decimal?    @db.Decimal(5, 2)
+  maxInterest Decimal?    @db.Decimal(5, 2)
+  isActive    Boolean     @default(true)
+
+  accounts    Account[]
+
+  @@map("products")
+}
+
+model Customer {
+  id              Int       @id @default(autoincrement())
+  customerNumber  Int       @unique // Örn: 10000001
+  identityNumber  String    @unique @db.VarChar(11)
+  firstName       String    @db.VarChar(50)
+  lastName        String    @db.VarChar(50)
+  isActive        Boolean   @default(true)
+  
+  // Şube İlişkisi
+  branchId        Int
+  branch          Branch    @relation(fields: [branchId], references: [id])
+
+  // Audit Log Bilgileri
+  createdAt       DateTime  @default(now())
+  createdById     String
+  createdBy       User      @relation("CustomerCreatedBy", fields: [createdById], references: [id])
+  updatedAt       DateTime  @updatedAt
+  updatedById     String?
+  updatedBy       User?     @relation("CustomerUpdatedBy", fields: [updatedById], references: [id])
+
+  accounts        Account[]
+
+  @@map("customers")
+}
+
+model Account {
+  id             Int           @id @default(autoincrement())
+  accountNumber  Int           // 1001, 1002 (Müşteri bazında artar)
+  iban           String        @unique @db.VarChar(34)
+  name           String        @db.VarChar(100)
+  currency       String        @db.VarChar(3)
+  balance        Decimal       @default(0.00) @db.Decimal(15, 2)
+  status         AccountStatus @default(ACTIVE)
+
+  // İlişkiler
+  customerId     Int
+  customer       Customer      @relation(fields: [customerId], references: [id])
+
+  branchId       Int
+  branch         Branch        @relation(fields: [branchId], references: [id])
+
+  productId      Int
+  product        Product       @relation(fields: [productId], references: [id])
+
+  // Vadeli Bilgileri
+  interestRate   Decimal?      @db.Decimal(5, 2)
+  renewalType    RenewalType?
+  maturityStart  DateTime?
+  maturityEnd    DateTime?
+  maturityDays   Int?
+
+  // Audit Log Bilgileri
+  createdAt      DateTime      @default(now())
+  createdById    String
+  createdBy      User          @relation("AccountCreatedBy", fields: [createdById], references: [id])
+  updatedAt      DateTime      @updatedAt
+  updatedById    String?
+  updatedBy      User?         @relation("AccountUpdatedBy", fields: [updatedById], references: [id])
+
+  @@unique([customerId, accountNumber])
+  @@map("accounts")
 }

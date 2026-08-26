@@ -5,6 +5,8 @@ import authRoutes from "./routes/authRoutes";
 import cookieParser from "cookie-parser";
 import adminRoutes from "./routes/adminRoutes";
 import prisma from "./config/prisma";
+import customerRoutes from "./routes/customerRoutes";
+import accountRoutes from "./routes/accountRoutes";
 
 dotenv.config();
 
@@ -35,9 +37,11 @@ app.use(
 
 app.use(cookieParser());
 app.use(express.json());
+app.use("/api/accounts", accountRoutes);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/customers", customerRoutes);
 
 const PORT = process.env.PORT || 5000;
 
