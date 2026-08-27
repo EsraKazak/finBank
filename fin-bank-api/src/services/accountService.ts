@@ -1,12 +1,13 @@
 import * as accountRepository from "../repositories/accountRepository";
 import { generateTurkishIban } from "../utils/ibanGenerator";
+import { generateReceiptNumber } from "../utils/receiptGenerator";
 import prisma from "../config/prisma";
-import type { RenewalType } from "@prisma/client";
-import type { AccountStatus } from "@prisma/client";
+import type { RenewalType, AccountStatus } from "@prisma/client";
 
 interface OpenAccountDTO {
   customerId: number;
   productId: number;
+  currencyId: number;
   name: string;
   interestRate?: number;
   renewalType?: RenewalType;
@@ -18,6 +19,7 @@ export const openAccount = async (dto: OpenAccountDTO) => {
   const {
     customerId,
     productId,
+    currencyId,
     name,
     interestRate,
     renewalType,
@@ -35,11 +37,23 @@ export const openAccount = async (dto: OpenAccountDTO) => {
     throw new Error("Geçerli bir müşteri bulunamadı.");
   }
 
-  // 2. Ürün kontrolü
-  const product = await accountRepository.findProductById(productId);
-  if (!product || !product.isActive) {
-    throw new Error("Seçilen bankacılık ürünü bulunamadı veya pasif durumda.");
+  // 2. Ürün ve Para Birimi Kural Kontrolü
+  const rule = await accountRepository.findProductCurrencyRule(
+    productId,
+    currencyId,
+  );
+  if (
+    !rule ||
+    !rule.isActive ||
+    !rule.product.isActive ||
+    !rule.currency.isActive
+  ) {
+    throw new Error(
+      "Seçilen bankacılık ürünü bu para biriminde hesap açılışına kapalıdır.",
+    );
   }
+
+  const product = rule.product;
 
   // 3. Vadeli / Vadesiz Kontrolleri
   let finalInterestRate: number | null = null;
@@ -59,15 +73,14 @@ export const openAccount = async (dto: OpenAccountDTO) => {
       throw new Error("Vadeli hesap için faiz oranı girilmelidir.");
     }
 
-    // Ürün faiz aralığı kontrolü
-    if (product.minInterest && interestRate < Number(product.minInterest)) {
+    if (rule.minInterest && interestRate < Number(rule.minInterest)) {
       throw new Error(
-        `Uygulanan faiz, taban faizden (%${product.minInterest}) düşük olamaz.`,
+        `Uygulanan faiz, taban faizden (%${rule.minInterest}) düşük olamaz.`,
       );
     }
-    if (product.maxInterest && interestRate > Number(product.maxInterest)) {
+    if (rule.maxInterest && interestRate > Number(rule.maxInterest)) {
       throw new Error(
-        `Uygulanan faiz, tavan faizden (%${product.maxInterest}) yüksek olamaz.`,
+        `Uygulanan faiz, tavan faizden (%${rule.maxInterest}) yüksek olamaz.`,
       );
     }
 
@@ -83,33 +96,58 @@ export const openAccount = async (dto: OpenAccountDTO) => {
     maturityEnd = endDate;
   }
 
-  // 4. Müşterinin hesap sırasını belirle (1001'den başlar)
+  // 4. Hesap sırasını ve IBAN'ı belirle
   const lastAccountNumber =
     await accountRepository.findLastAccountNumberByCustomer(customerId);
   const nextAccountNumber = lastAccountNumber ? lastAccountNumber + 1 : 1001;
 
-  // 5. Otomatik IBAN üret
   const iban = generateTurkishIban(
     customer.branch.code,
     customer.customerNumber,
     nextAccountNumber,
   );
 
-  // 6. Hesabı oluştur
-  return await accountRepository.createAccount({
-    accountNumber: nextAccountNumber,
-    iban,
-    name: name.trim(),
-    currency: product.currency,
-    customerId,
-    branchId: customer.branchId, // Müşterinin şubesinde açılır
-    productId,
-    createdById: userId,
-    interestRate: finalInterestRate,
-    renewalType: finalRenewalType,
-    maturityStart,
-    maturityEnd,
-    maturityDays: finalMaturityDays,
+  // 5. Transaction: Hem hesabı aç hem de Açılış Muhasebe Fişini kes
+  return await prisma.$transaction(async (tx) => {
+    const newAccount = await tx.account.create({
+      data: {
+        accountNumber: nextAccountNumber,
+        iban,
+        name: name.trim(),
+        customerId,
+        branchId: customer.branchId,
+        productId,
+        currencyId,
+        createdById: userId,
+        interestRate: finalInterestRate,
+        renewalType: finalRenewalType,
+        maturityStart,
+        maturityEnd,
+        maturityDays: finalMaturityDays,
+      },
+      include: {
+        product: true,
+        currency: true,
+        branch: true,
+        customer: true,
+      },
+    });
+
+    // Açılış Fişi Kaydı
+    const receiptNumber = generateReceiptNumber(customer.branch.code);
+    await tx.accountingRecord.create({
+      data: {
+        receiptNumber,
+        type: "OTHER",
+        amount: 0.0,
+        description: `Hesap Açılış Kaydı: ${newAccount.accountNumber} - ${newAccount.name} (${rule.currency.code})`,
+        branchId: customer.branchId,
+        accountId: newAccount.id,
+        createdById: userId,
+      },
+    });
+
+    return newAccount;
   });
 };
 
@@ -122,22 +160,86 @@ export const changeAccountStatus = async (
   newStatus: AccountStatus,
   userId: string,
 ) => {
-  const account = await accountRepository.findAccountById(accountId);
+  const account = await prisma.account.findUnique({
+    where: { id: accountId },
+    include: { branch: true },
+  });
 
   if (!account) {
     throw new Error("Hesap bulunamadı.");
   }
 
-  // Kapalı hesap üzerinde tekrar işlem yapılamaz kuralı
   if (account.status === "CLOSED") {
     throw new Error(
       "Kapatılmış hesaplar üzerinde durum değişikliği veya işlem yapılamaz.",
     );
   }
 
-  return await accountRepository.updateAccountStatus(
-    accountId,
-    newStatus,
-    userId,
-  );
+  if (account.status === newStatus) {
+    throw new Error(`Hesap zaten ${newStatus} durumundadır.`);
+  }
+
+  // Bakiye kontrolü: Kapatılacak hesapta bakiye sıfır olmalıdır
+  if (newStatus === "CLOSED" && Number(account.balance) > 0) {
+    throw new Error(
+      `Hesap bakiyesi (${account.balance}) sıfır olmadan hesap kapatılamaz. Lütfen önce bakiyeyi çekiniz.`,
+    );
+  }
+
+  // Fiş açıklamalarını duruma göre dinamik belirle
+  const statusDescriptions: Record<AccountStatus, string> = {
+    BLOCKED: `Hesap Bloke Fişi: ${account.accountNumber} nolu hesaba bloke konuldu.`,
+    ACTIVE: `Hesap Bloke Kaldırma Fişi: ${account.accountNumber} nolu hesabın blokesi kaldırıldı.`,
+    CLOSED: `Hesap Kapanış Fişi: ${account.accountNumber} nolu hesap kapatıldı.`,
+  };
+
+  return await prisma.$transaction(async (tx) => {
+    // 1. Hesap durumunu güncelle
+    const updatedAccount = await tx.account.update({
+      where: { id: accountId },
+      data: {
+        status: newStatus,
+        updatedById: userId,
+      },
+      include: {
+        product: true,
+        currency: true,
+        branch: true,
+      },
+    });
+
+    // 2. Her durum değişikliği için Muhasebe Fişi kes
+    const receiptNumber = generateReceiptNumber(account.branch.code);
+    await tx.accountingRecord.create({
+      data: {
+        receiptNumber,
+        type: "OTHER",
+        amount: 0.0,
+        description: statusDescriptions[newStatus],
+        branchId: account.branchId,
+        accountId: account.id,
+        createdById: userId,
+      },
+    });
+
+    return updatedAccount;
+  });
+};
+
+export const renameAccount = async (
+  accountId: number,
+  newName: string,
+  userId: string,
+) => {
+  const account = await accountRepository.findAccountById(accountId);
+  if (!account) {
+    throw new Error("Hesap bulunamadı.");
+  }
+  if (account.status === "CLOSED") {
+    throw new Error("Kapatılmış hesapların adı güncellenemez.");
+  }
+  if (!newName.trim()) {
+    throw new Error("Hesap adı boş bırakılamaz.");
+  }
+  return await accountRepository.updateAccountName(accountId, newName, userId);
 };

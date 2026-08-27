@@ -31,13 +31,21 @@ interface Role {
   name: string;
 }
 
+interface Branch {
+  id: number;
+  code: string;
+  name: string;
+}
+
 interface AuthorizedPersonnel {
   id: string;
   name: string;
   surname: string;
   email: string;
   roleId: string;
+  branchId: number;
   role?: Role;
+  branch?: Branch;
   status: "PENDING" | "COMPLETED";
   createdAt: string;
 }
@@ -55,32 +63,41 @@ export const PersonnelManagement: React.FC<{
 }> = ({ viewMode }) => {
   const [list, setList] = useState<AuthorizedPersonnel[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(false);
   const [openModal, setOpenModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    surname: string;
+    email: string;
+    roleId: string;
+    branchId: number | "";
+  }>({
     name: "",
     surname: "",
     email: "",
     roleId: "",
+    branchId: "",
   });
 
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [listRes, rolesRes] = await Promise.all([
+      const [listRes, rolesRes, branchesRes] = await Promise.all([
         api.get("/auth/authorized-personnel"),
         api.get("/admin/roles"),
+        api.get("/customers/branches"),
       ]);
 
-      // Beyaz liste kayıtları
       setList(listRes.data.data || []);
 
-      // Gelen veri { roles: [...] } şeklinde mi yoksa doğrudan dizi mi kontrolü:
       const rolesData =
         rolesRes.data.data?.roles || rolesRes.data.data || rolesRes.data || [];
       setRoles(rolesData);
+
+      setBranches(branchesRes.data.data || []);
     } catch (err: any) {
       setError("Veriler yüklenirken bir hata oluştu.");
     } finally {
@@ -94,10 +111,24 @@ export const PersonnelManagement: React.FC<{
 
   const handleAddPersonnel = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.branchId || !formData.roleId) {
+      alert("Lütfen rol ve şube seçimini eksiksiz yapınız.");
+      return;
+    }
+
     try {
-      await api.post("/auth/authorized-personnel", formData);
+      await api.post("/auth/authorized-personnel", {
+        ...formData,
+        branchId: Number(formData.branchId),
+      });
       setOpenModal(false);
-      setFormData({ name: "", surname: "", email: "", roleId: "" });
+      setFormData({
+        name: "",
+        surname: "",
+        email: "",
+        roleId: "",
+        branchId: "",
+      });
       fetchData();
     } catch (err: any) {
       alert(err.response?.data?.message || "Ekleme başarısız.");
@@ -156,6 +187,7 @@ export const PersonnelManagement: React.FC<{
               <TableRow>
                 <TableCell sx={{ fontWeight: 700 }}>Ad Soyad</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Kurumsal E-posta</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Görev Şubesi</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Tanımlanan Rol</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Kayıt Durumu</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Davet Tarihi</TableCell>
@@ -164,14 +196,14 @@ export const PersonnelManagement: React.FC<{
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
                     <CircularProgress size={28} />
                   </TableCell>
                 </TableRow>
               ) : list.length === 0 ? (
                 <TableRow>
                   <TableCell
-                    colSpan={5}
+                    colSpan={6}
                     align="center"
                     sx={{ py: 3, color: "text.secondary" }}
                   >
@@ -185,6 +217,18 @@ export const PersonnelManagement: React.FC<{
                       sx={{ fontWeight: 600 }}
                     >{`${item.name} ${item.surname}`}</TableCell>
                     <TableCell>{item.email}</TableCell>
+                    <TableCell>
+                      {item.branch ? (
+                        <Chip
+                          label={`${item.branch.code} - ${item.branch.name}`}
+                          size="small"
+                          variant="outlined"
+                          sx={{ fontWeight: 600 }}
+                        />
+                      ) : (
+                        "-"
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Chip
                         label={
@@ -226,7 +270,7 @@ export const PersonnelManagement: React.FC<{
         </TableContainer>
       </Paper>
 
-      {/* ROL SEÇİMLİ PERSONEL EKLEME MODALI */}
+      {/* ŞUBE VE ROL SEÇİMLİ PERSONEL EKLEME MODALI */}
       <Dialog
         open={openModal}
         onClose={() => setOpenModal(false)}
@@ -271,6 +315,30 @@ export const PersonnelManagement: React.FC<{
                 setFormData({ ...formData, email: e.target.value })
               }
             />
+
+            {/* Şube Seçim Dropdown */}
+            <FormControl required fullWidth size="small">
+              <InputLabel id="branch-select-label">
+                Görev Yapacağı Şube
+              </InputLabel>
+              <Select
+                labelId="branch-select-label"
+                label="Görev Yapacağı Şube"
+                value={formData.branchId}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    branchId: Number(e.target.value),
+                  })
+                }
+              >
+                {branches.map((branch) => (
+                  <MenuItem key={branch.id} value={branch.id}>
+                    {branch.code} - {branch.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
 
             {/* Rol Seçim Dropdown */}
             <FormControl required fullWidth size="small">

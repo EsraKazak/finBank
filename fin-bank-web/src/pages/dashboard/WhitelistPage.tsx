@@ -15,11 +15,15 @@ import { PersonnelManagement } from "../../features/admin/PersonnelManagement";
 // Modal Bileşeni
 export const AddPersonnelModal = ({ onSuccess }: { onSuccess: () => void }) => {
   const [roles, setRoles] = useState<{ id: string; name: string }[]>([]);
+  const [branches, setBranches] = useState<
+    { id: number; code: string; name: string }[]
+  >([]);
   const [formData, setFormData] = useState({
     name: "",
     surname: "",
     email: "",
     roleId: "",
+    branchId: "",
   });
 
   const roleDisplayNames: Record<string, string> = {
@@ -31,21 +35,29 @@ export const AddPersonnelModal = ({ onSuccess }: { onSuccess: () => void }) => {
   };
 
   useEffect(() => {
-    const fetchRoles = async () => {
+    const fetchParams = async () => {
       try {
-        const res = await api.get("/admin/roles");
-        setRoles(res.data.data || res.data || []);
+        const [rolesRes, branchesRes] = await Promise.all([
+          api.get("/admin/roles"),
+          api.get("/branches"),
+        ]);
+        setRoles(rolesRes.data.data || rolesRes.data || []);
+        setBranches(branchesRes.data.data || []);
       } catch (err) {
-        console.error("Roller yüklenemedi", err);
+        console.error("Parametreler yüklenemedi", err);
       }
     };
-    fetchRoles();
+    fetchParams();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.branchId || !formData.roleId) return;
     try {
-      await api.post("/auth/authorized-personnel", formData);
+      await api.post("/auth/authorized-personnel", {
+        ...formData,
+        branchId: Number(formData.branchId),
+      });
       onSuccess();
     } catch (err: any) {
       alert(err.response?.data?.message || "Hata oluştu");
@@ -80,6 +92,24 @@ export const AddPersonnelModal = ({ onSuccess }: { onSuccess: () => void }) => {
         value={formData.email}
         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
       />
+
+      <FormControl size="small" required fullWidth>
+        <InputLabel id="branch-modal-label">Görev Şubesi</InputLabel>
+        <Select
+          labelId="branch-modal-label"
+          label="Görev Şubesi"
+          value={formData.branchId}
+          onChange={(e) =>
+            setFormData({ ...formData, branchId: e.target.value })
+          }
+        >
+          {branches.map((branch) => (
+            <MenuItem key={branch.id} value={branch.id}>
+              {branch.code} - {branch.name}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
 
       <FormControl size="small" required fullWidth>
         <InputLabel id="role-select-label">Rol Tanımla</InputLabel>

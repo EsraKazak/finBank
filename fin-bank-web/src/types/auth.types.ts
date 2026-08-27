@@ -50,3 +50,23 @@ export interface IAdminUserItem {
     permission: IPermission;
   }[];
 }
+
+export interface IBranch {
+  id: number;
+  code: string;
+  name: string;
+  city: string;
+}
+
+export interface AuthorizedPersonnel {
+  id: string;
+  name: string;
+  surname: string;
+  email: string;
+  roleId: string;
+  branchId: number;
+  role?: IRole;
+  branch?: IBranch;
+  status: "PENDING" | "COMPLETED";
+  createdAt: string;
+}

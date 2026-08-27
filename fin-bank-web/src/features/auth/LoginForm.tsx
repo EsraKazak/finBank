@@ -1,5 +1,8 @@
 import React, { useState } from "react";
 import { Box, TextField, Button, Alert, CircularProgress } from "@mui/material";
+import { InputAdornment, IconButton } from "@mui/material";
+import Visibility from "@mui/icons-material/Visibility";
+import VisibilityOff from "@mui/icons-material/VisibilityOff";
 
 interface LoginFormProps {
   onSubmit: (username: string, pass: string) => Promise<void>;
@@ -19,6 +22,19 @@ export const LoginForm: React.FC<LoginFormProps> = ({
     e.preventDefault();
     console.log("1. Form submit tetiklendi:", { username, password });
     await onSubmit(username, password);
+  };
+
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleTogglePasswordVisibility = () => {
+    setShowPassword((prev) => !prev);
+  };
+
+  // Butona tıklandığında input odağının kaybolmaması için:
+  const handleMouseDownPassword = (
+    event: React.MouseEvent<HTMLButtonElement>,
+  ) => {
+    event.preventDefault();
   };
 
   return (
@@ -48,15 +64,31 @@ export const LoginForm: React.FC<LoginFormProps> = ({
 
       <TextField
         label="Şifre"
-        type="password"
-        variant="outlined"
-        fullWidth
-        required
-        placeholder="••••••"
+        name="password"
+        type={showPassword ? "text" : "password"}
         value={password}
         onChange={(e) => setPassword(e.target.value)}
-        disabled={isLoading}
+        fullWidth
+        required
         autoComplete="current-password"
+        disabled={isLoading}
+        slotProps={{
+          input: {
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  aria-label="şifre görünürlüğünü değiştir"
+                  onClick={handleTogglePasswordVisibility}
+                  onMouseDown={handleMouseDownPassword}
+                  edge="end"
+                  size="small"
+                >
+                  {showPassword ? <VisibilityOff /> : <Visibility />}
+                </IconButton>
+              </InputAdornment>
+            ),
+          },
+        }}
       />
 
       {errorMessage && (

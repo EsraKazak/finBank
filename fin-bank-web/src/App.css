@@ -1,0 +1,40 @@
+@media print {
+  @page {
+    size: A4 portrait; /* Standart A4 tam sayfa */
+    margin: 15mm; /* Kenar boşlukları */
+  }
+
+  /* Sayfadaki diğer tüm şeyleri gizle */
+  body * {
+    visibility: hidden !important;
+  }
+
+  .MuiDialogActions-root,
+  .MuiDialogActions-root *,
+  .MuiBackdrop-root,
+  .no-print {
+    display: none !important;
+    visibility: hidden !important;
+  }
+
+  /* Dekontu görünür yap ve sayfaya %100 genişlikle yay */
+  #printable-receipt,
+  #printable-receipt * {
+    visibility: visible !important;
+  }
+
+  #printable-receipt {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: auto !important;
+    margin: 0 !important;
+    padding: 30px !important;
+    border: 2px solid #1e293b !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    box-sizing: border-box !important;
+  }
+}

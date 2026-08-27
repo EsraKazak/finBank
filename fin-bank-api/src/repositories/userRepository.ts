@@ -15,6 +15,7 @@ class UserRepository {
     username: string;
     email: string;
     password?: string;
+    branchId: number;
   }) {
     return await prisma.user.create({
       data: {
@@ -23,6 +24,10 @@ class UserRepository {
         username: data.username,
         email: data.email,
         password: data.password || "",
+        branchId: data.branchId,
+      },
+      include: {
+        branch: true,
       },
     });
   }
@@ -51,6 +56,7 @@ class UserRepository {
     surname: string;
     email: string;
     roleId: string;
+    branchId: number;
   }) {
     return await prisma.authorizedPersonnel.create({
       data: {
@@ -58,14 +64,22 @@ class UserRepository {
         surname: data.surname,
         email: data.email,
         roleId: data.roleId,
+        branchId: data.branchId,
+        status: "PENDING",
       },
-      include: { role: true },
+      include: {
+        role: true,
+        branch: true,
+      },
     });
   }
 
   async getAuthorizedPersonnelList() {
     return await prisma.authorizedPersonnel.findMany({
-      include: { role: true },
+      include: {
+        role: true,
+        branch: true,
+      },
       orderBy: { createdAt: "desc" },
     });
   }

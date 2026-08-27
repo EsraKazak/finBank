@@ -32,6 +32,7 @@ import LockClockOutlinedIcon from "@mui/icons-material/LockClockOutlined";
 import PolicyOutlinedIcon from "@mui/icons-material/PolicyOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
 import NotificationsNoneOutlinedIcon from "@mui/icons-material/NotificationsNoneOutlined";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 
 import { useAuth } from "../hooks/useAuth";
 
@@ -40,7 +41,7 @@ const DRAWER_COLLAPSED = 72;
 
 export const DashboardPage: React.FC = () => {
   const { user, logout } = useAuth();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -87,6 +88,8 @@ export const DashboardPage: React.FC = () => {
         return "Şube Gün Sonu Kapatma";
       case "/dashboard/audit":
         return "Denetim ve Log Kayıtları";
+      case "/dashboard/demand-accounts":
+        return "Vadesiz Hesap Yönetimi";
       default:
         return "FinBank Portal";
     }
@@ -367,6 +370,55 @@ export const DashboardPage: React.FC = () => {
                               sx={{ fontSize: "0.88rem", fontWeight: 600 }}
                             >
                               Müşteri Yönetimi
+                            </Typography>
+                          }
+                        />
+                      )}
+                    </ListItemButton>
+                  </ListItem>
+                </Tooltip>
+              )}
+              {hasPerm("musteri:goruntule") && (
+                <Tooltip
+                  title={!open ? "Vadesiz Hesap Yönetimi" : ""}
+                  placement="right"
+                >
+                  <ListItem disablePadding sx={{ mb: 0.8 }}>
+                    <ListItemButton
+                      selected={
+                        location.pathname === "/dashboard/demand-accounts"
+                      }
+                      onClick={() => navigate("/dashboard/demand-accounts")}
+                      sx={{
+                        borderRadius: 2,
+                        justifyContent: open ? "initial" : "center",
+                        px: 2,
+                        "&.Mui-selected": {
+                          bgcolor: "#172a45",
+                          color: "#64ffda",
+                        },
+                        "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
+                      }}
+                    >
+                      <ListItemIcon
+                        sx={{
+                          color:
+                            location.pathname === "/dashboard/demand-accounts"
+                              ? "#64ffda"
+                              : "grey.400",
+                          minWidth: open ? 40 : "auto",
+                          mr: open ? 1 : "auto",
+                        }}
+                      >
+                        <AccountBalanceWalletIcon />
+                      </ListItemIcon>
+                      {open && (
+                        <ListItemText
+                          primary={
+                            <Typography
+                              sx={{ fontSize: "0.88rem", fontWeight: 600 }}
+                            >
+                              Vadesiz Hesap Yönetimi
                             </Typography>
                           }
                         />

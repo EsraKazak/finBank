@@ -1,6 +1,5 @@
 import prisma from "../config/prisma";
-import type { RenewalType } from "@prisma/client";
-import type { AccountStatus } from "@prisma/client";
+import type { RenewalType, AccountStatus } from "@prisma/client";
 
 export const findLastAccountNumberByCustomer = async (
   customerId: number,
@@ -19,14 +18,35 @@ export const findProductById = async (productId: number) => {
   });
 };
 
+export const findCurrencyById = async (currencyId: number) => {
+  return prisma.currency.findUnique({
+    where: { id: currencyId },
+  });
+};
+
+export const findProductCurrencyRule = async (
+  productId: number,
+  currencyId: number,
+) => {
+  return prisma.productCurrency.findUnique({
+    where: {
+      productId_currencyId: { productId, currencyId },
+    },
+    include: {
+      product: true,
+      currency: true,
+    },
+  });
+};
+
 export const createAccount = async (data: {
   accountNumber: number;
   iban: string;
   name: string;
-  currency: string;
   customerId: number;
   branchId: number;
   productId: number;
+  currencyId: number;
   createdById: string;
   interestRate?: number | null;
   renewalType?: RenewalType | null;
@@ -38,6 +58,7 @@ export const createAccount = async (data: {
     data,
     include: {
       product: true,
+      currency: true,
       branch: true,
       customer: true,
     },
@@ -49,6 +70,7 @@ export const listAccountsByCustomerId = async (customerId: number) => {
     where: { customerId },
     include: {
       product: true,
+      currency: true,
       branch: true,
     },
     orderBy: { accountNumber: "asc" },
@@ -68,6 +90,7 @@ export const updateAccountStatus = async (
     },
     include: {
       product: true,
+      currency: true,
       branch: true,
     },
   });
@@ -76,5 +99,25 @@ export const updateAccountStatus = async (
 export const findAccountById = async (id: number) => {
   return prisma.account.findUnique({
     where: { id },
+    include: {
+      product: true,
+      currency: true,
+      customer: true,
+    },
+  });
+};
+
+export const updateAccountName = async (
+  accountId: number,
+  name: string,
+  updatedById: string,
+) => {
+  return prisma.account.update({
+    where: { id: accountId },
+    data: { name: name.trim(), updatedById },
+    include: {
+      product: true,
+      currency: true,
+    },
   });
 };

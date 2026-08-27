@@ -70,7 +70,12 @@ class AuthService {
     surname: string;
     email: string;
     roleId: string;
+    branchId: number;
   }) {
+    if (!data.branchId) {
+      throw new Error("Personelin görev yapacağı şube seçimi zorunludur.");
+    }
+
     const existing = await userRepository.findAuthorizedEmail(data.email);
     if (existing) {
       throw new Error(
@@ -107,13 +112,14 @@ class AuthService {
       userData.surname,
     );
 
-    // 1. Kullanıcıyı oluştur
+    // 1. Kullanıcıyı oluştur (Davetteki branchId atanır)
     const newUser = await userRepository.createUser({
       name: userData.name,
       surname: userData.surname,
       username: generatedUsername,
       email: userData.email,
       password: "",
+      branchId: authorized.branchId,
     });
 
     // 2. Beyaz listede önceden belirlenen rolü UserRole tablosuna ekle

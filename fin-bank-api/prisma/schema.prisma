@@ -22,6 +22,8 @@ model AuthorizedPersonnel {
   surname   String
   roleId    String
   role      Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  branchId  Int             // Soru işareti kalktı: kesinlikle dolu (number)
+  branch    Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
   status    WhitelistStatus @default(PENDING)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
@@ -30,31 +32,29 @@ model AuthorizedPersonnel {
 }
 
 model User {
-  id              String           @id @default(uuid())
-  name            String
-  surname         String
-  username        String           @unique
-  email           String           @unique
-  password        String
-  userRole        UserRole?
-  userPermissions UserPermission[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  notifications   Notification[]
+  id                       String             @id @default(uuid())
+  name                     String
+  surname                  String
+  username                 String             @unique
+  email                    String             @unique
+  password                 String
+  userRole                 UserRole?
+  userPermissions          UserPermission[]
+  createdAt                DateTime           @default(now())
+  updatedAt                DateTime           @updatedAt
+  notifications            Notification[]
 
-  // Şube İlişkisi: Mevcut verilerin silinmemesi için opsiyonel (Int?)
-  branchId        Int?
-  branch          Branch?          @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  branchId                 Int                // Soru işareti kalktı: kesinlikle dolu (number)
+  branch                   Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  createdAccountingRecords AccountingRecord[] @relation("RecordCreatedBy")
 
-  // Audit Log İlişkileri
-  createdCustomers Customer[]      @relation("CustomerCreatedBy")
-  updatedCustomers Customer[]      @relation("CustomerUpdatedBy")
-  createdAccounts  Account[]       @relation("AccountCreatedBy")
-  updatedAccounts  Account[]       @relation("AccountUpdatedBy")
+  createdCustomers         Customer[]         @relation("CustomerCreatedBy")
+  updatedCustomers         Customer[]         @relation("CustomerUpdatedBy")
+  createdAccounts          Account[]          @relation("AccountCreatedBy")
+  updatedAccounts          Account[]          @relation("AccountUpdatedBy")
 
   @@map("users")
 }
-
 model Role {
   id                  String                @id @default(uuid())
   name                String                @unique
@@ -137,7 +137,7 @@ model Notification {
 }
 
 // ==========================================
-// 2. YENİ BANKACILIK ENUMLARI VE MODELLERİ
+// 2. BANKACILIK PARAMETRİK MODELLERİ
 // ==========================================
 enum AccountType {
   DEMAND  // Vadesiz
@@ -145,9 +145,9 @@ enum AccountType {
 }
 
 enum RenewalType {
-  PRINCIPAL_AND_INTEREST  // Anapara + Faiz uzat
-  PRINCIPAL_ONLY          // Sadece anapara uzat
-  CLOSE                   // Vade sonunda kapat
+  PRINCIPAL_AND_INTEREST
+  PRINCIPAL_ONLY
+  CLOSE
 }
 
 enum AccountStatus {
@@ -157,48 +157,79 @@ enum AccountStatus {
 }
 
 model Branch {
-  id        Int        @id @default(autoincrement())
-  code      String     @unique @db.VarChar(10) // Örn: "001", "002", "003"
-  name      String     @db.VarChar(100)        // Örn: "Kadıköy Şubesi"
-  city      String     @db.VarChar(50)
-  isActive  Boolean    @default(true)
-  createdAt DateTime   @default(now())
+  id                  Int                   @id @default(autoincrement())
+  code                String                @unique @db.VarChar(10)
+  name                String                @db.VarChar(100)
+  city                String                @db.VarChar(50)
+  isActive            Boolean               @default(true)
+  createdAt           DateTime              @default(now())
 
-  users     User[]
-  customers Customer[]
-  accounts  Account[]
+  users               User[]
+  customers           Customer[]
+  accounts            Account[]
+  accountingRecords   AccountingRecord[]
+  authorizedPersonnel AuthorizedPersonnel[]
 
   @@map("branches")
 }
 
-model Product {
-  id          Int         @id @default(autoincrement())
-  code        String      @unique @db.VarChar(20) // Örn: "TIME-TRY", "DEMAND-TRY"
-  name        String      @db.VarChar(100)
-  type        AccountType
-  currency    String      @db.VarChar(3)          // TRY, USD, EUR
-  minInterest Decimal?    @db.Decimal(5, 2)
-  maxInterest Decimal?    @db.Decimal(5, 2)
-  isActive    Boolean     @default(true)
 
-  accounts    Account[]
+// 1. Döviz / Para Birimleri Tablosu
+model Currency {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique @db.VarChar(3) // TRY, USD, EUR, GBP
+  name      String   @db.VarChar(50)        // Türk Lirası, ABD Doları, Euro
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  accounts          Account[]
+  productCurrencies ProductCurrency[]
+
+  @@map("currencies")
+}
+
+// 2. Ürün Tablosu (Para biriminden bağımsız genel ürün kuralları)
+model Product {
+  id          Int               @id @default(autoincrement())
+  code        String            @unique @db.VarChar(20) // DEMAND_DEPOSIT, TIME_DEPOSIT
+  name        String            @db.VarChar(100)        // Vadesiz Mevduat Hesabı
+  type        AccountType                               // DEMAND / TIME
+  isActive    Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+
+  accounts          Account[]
+  productCurrencies ProductCurrency[]
 
   @@map("products")
 }
 
+// 3. Ürün - Döviz İlişki & Kural Tablosu
+model ProductCurrency {
+  id          Int      @id @default(autoincrement())
+  productId   Int
+  currencyId  Int
+  minInterest Decimal? @db.Decimal(5, 2)
+  maxInterest Decimal? @db.Decimal(5, 2)
+  isActive    Boolean  @default(true)
+
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  currency    Currency @relation(fields: [currencyId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, currencyId])
+  @@map("product_currencies")
+}
+
 model Customer {
   id              Int       @id @default(autoincrement())
-  customerNumber  Int       @unique // Örn: 10000001
+  customerNumber  Int       @unique
   identityNumber  String    @unique @db.VarChar(11)
   firstName       String    @db.VarChar(50)
   lastName        String    @db.VarChar(50)
   isActive        Boolean   @default(true)
   
-  // Şube İlişkisi
   branchId        Int
   branch          Branch    @relation(fields: [branchId], references: [id])
 
-  // Audit Log Bilgileri
   createdAt       DateTime  @default(now())
   createdById     String
   createdBy       User      @relation("CustomerCreatedBy", fields: [createdById], references: [id])
@@ -212,39 +243,71 @@ model Customer {
 }
 
 model Account {
-  id             Int           @id @default(autoincrement())
-  accountNumber  Int           // 1001, 1002 (Müşteri bazında artar)
-  iban           String        @unique @db.VarChar(34)
-  name           String        @db.VarChar(100)
-  currency       String        @db.VarChar(3)
-  balance        Decimal       @default(0.00) @db.Decimal(15, 2)
-  status         AccountStatus @default(ACTIVE)
+  id            Int           @id @default(autoincrement())
+  accountNumber Int
+  iban          String        @unique @db.VarChar(34)
+  name          String        @db.VarChar(100)
+  balance       Decimal       @default(0.00) @db.Decimal(15, 2)
+  status        AccountStatus @default(ACTIVE)
 
-  // İlişkiler
-  customerId     Int
-  customer       Customer      @relation(fields: [customerId], references: [id])
+  customerId    Int
+  customer      Customer      @relation(fields: [customerId], references: [id])
 
-  branchId       Int
-  branch         Branch        @relation(fields: [branchId], references: [id])
+  branchId      Int
+  branch        Branch        @relation(fields: [branchId], references: [id])
 
-  productId      Int
-  product        Product       @relation(fields: [productId], references: [id])
+  productId     Int
+  product       Product       @relation(fields: [productId], references: [id])
 
-  // Vadeli Bilgileri
-  interestRate   Decimal?      @db.Decimal(5, 2)
-  renewalType    RenewalType?
-  maturityStart  DateTime?
-  maturityEnd    DateTime?
-  maturityDays   Int?
+ currencyId    Int
+currency      Currency      @relation(fields: [currencyId], references: [id])
+accountingRecords AccountingRecord[]
 
-  // Audit Log Bilgileri
-  createdAt      DateTime      @default(now())
-  createdById    String
-  createdBy      User          @relation("AccountCreatedBy", fields: [createdById], references: [id])
-  updatedAt      DateTime      @updatedAt
-  updatedById    String?
-  updatedBy      User?         @relation("AccountUpdatedBy", fields: [updatedById], references: [id])
+  interestRate  Decimal?      @db.Decimal(5, 2)
+  renewalType   RenewalType?
+  maturityStart DateTime?
+  maturityEnd   DateTime?
+  maturityDays  Int?
+
+  createdAt     DateTime      @default(now())
+  createdById   String
+  createdBy     User          @relation("AccountCreatedBy", fields: [createdById], references: [id])
+  updatedAt     DateTime      @updatedAt
+  updatedById   String?
+  updatedBy     User?         @relation("AccountUpdatedBy", fields: [updatedById], references: [id])
 
   @@unique([customerId, accountNumber])
   @@map("accounts")
+}
+
+enum TransactionType {
+  DEPOSIT     // Para Yatırma
+  WITHDRAWAL  // Para Çekme
+  TRANSFER    // Para Transferi
+  OTHER       // Diğer İşlemler
+}
+
+model AccountingRecord {
+  id              Int             @id @default(autoincrement())
+  receiptNumber   String          @unique @db.VarChar(50) // Fiş / Referans Numarası (Örn: "FIS-20260827-0001")
+  type            TransactionType // İşlem Türü
+  amount          Decimal         @db.Decimal(15, 2)      // İşlem Tutarı
+  description     String          @db.VarChar(255)        // İşlem Açıklaması
+  transactionDate DateTime        @default(now())         // İşlem Tarihi
+
+  // Şube Bilgisi
+  branchId        Int
+  branch          Branch          @relation(fields: [branchId], references: [id])
+
+  // İsteğe Bağlı İlgili Hesap (Hangi hesaba yapıldı)
+  accountId       Int?
+  account         Account?        @relation(fields: [accountId], references: [id])
+
+  // İşlemi Yapan Personel
+  createdById     String
+  createdBy       User            @relation("RecordCreatedBy", fields: [createdById], references: [id])
+
+  createdAt       DateTime        @default(now())
+
+  @@map("accounting_records")
 }

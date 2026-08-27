@@ -5,11 +5,11 @@ class AuthController {
   // Yönetici tarafından beyaz listeye personel tanımlama
   async addAuthorizedPersonnel(req: Request, res: Response) {
     try {
-      const { name, surname, email, roleId } = req.body;
+      const { name, surname, email, roleId, branchId } = req.body;
 
-      if (!name || !surname || !email || !roleId) {
+      if (!name || !surname || !email || !roleId || !branchId) {
         return res.status(400).json({
-          message: "Ad, soyad, e-posta ve rol seçimi zorunludur.",
+          message: "Ad, soyad, e-posta, rol ve şube seçimi zorunludur.",
         });
       }
 
@@ -18,6 +18,7 @@ class AuthController {
         surname,
         email,
         roleId,
+        branchId: Number(branchId),
       });
 
       return res.status(201).json({

@@ -18,6 +18,7 @@ import { CashierPage } from "../pages/dashboard/CashierPage";
 import { ApprovalsPage } from "../pages/dashboard/ApprovalsPage";
 import { EndOfDayPage } from "../pages/dashboard/EndOfDayPage";
 import { AuditPage } from "../pages/dashboard/AuditPage";
+import { DemandAccountsPage } from "../pages/dashboard/DemandAccountsPage";
 
 export const router = createBrowserRouter([
   // 1. Sadece Giriş Yapmamışlara Açık Alan (Public)
@@ -79,6 +80,10 @@ export const router = createBrowserRouter([
               {
                 path: "customers",
                 element: <CustomersPage />,
+              },
+              {
+                path: "demand-accounts",
+                element: <DemandAccountsPage />,
               },
             ],
           },
