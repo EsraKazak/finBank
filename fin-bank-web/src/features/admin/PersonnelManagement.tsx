@@ -1,15 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Box,
-  Paper,
   Typography,
   Button,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Chip,
   Dialog,
   DialogTitle,
@@ -20,10 +13,11 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  CircularProgress,
   Alert,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
+import { AgGridReact } from "ag-grid-react";
+import type { ColDef } from "ag-grid-community";
 import api from "../../services/api";
 
 interface Role {
@@ -135,6 +129,95 @@ export const PersonnelManagement: React.FC<{
     }
   };
 
+  const columnDefs = useMemo<ColDef<AuthorizedPersonnel>[]>(
+    () => [
+      {
+        headerName: "Ad Soyad",
+        valueGetter: (params) =>
+          `${params.data?.name || ""} ${params.data?.surname || ""}`,
+        flex: 1.2,
+        cellRenderer: (params: any) => (
+          <Typography sx={{ fontWeight: 600, fontSize: "0.875rem" }}>
+            {params.value}
+          </Typography>
+        ),
+      },
+      {
+        headerName: "Kurumsal E-posta",
+        field: "email",
+        flex: 1.5,
+      },
+      {
+        headerName: "Görev Şubesi",
+        field: "branch",
+        flex: 1.2,
+        cellRenderer: (params: any) => {
+          const branch = params.data?.branch;
+          return branch ? (
+            <Chip
+              label={`${branch.code} - ${branch.name}`}
+              size="small"
+              variant="outlined"
+              sx={{ fontWeight: 600 }}
+            />
+          ) : (
+            "-"
+          );
+        },
+      },
+      {
+        headerName: "Tanımlanan Rol",
+        field: "role",
+        flex: 1.4,
+        cellRenderer: (params: any) => {
+          const roleName = params.data?.role?.name;
+          return (
+            <Chip
+              label={
+                roleName
+                  ? roleDisplayNames[roleName] || roleName
+                  : "Rol Seçilmedi"
+              }
+              size="small"
+              sx={{
+                bgcolor: "#e3f2fd",
+                color: "#1976d2",
+                fontWeight: 700,
+              }}
+            />
+          );
+        },
+      },
+      {
+        headerName: "Kayıt Durumu",
+        field: "status",
+        flex: 1.2,
+        cellRenderer: (params: any) => {
+          const isCompleted = params.value === "COMPLETED";
+          return (
+            <Chip
+              label={isCompleted ? "Kayıt Tamamlandı" : "Aktivasyon Bekliyor"}
+              size="small"
+              color={isCompleted ? "success" : "warning"}
+              variant="outlined"
+              sx={{ fontWeight: 600 }}
+            />
+          );
+        },
+      },
+      {
+        headerName: "Davet Tarihi",
+        field: "createdAt",
+        flex: 1,
+        valueFormatter: (params) =>
+          params.value
+            ? new Date(params.value).toLocaleDateString("tr-TR")
+            : "",
+      },
+    ],
+    [],
+  );
+
   return (
     <Box>
       <Box
@@ -173,102 +256,26 @@ export const PersonnelManagement: React.FC<{
         </Alert>
       )}
 
-      <Paper
-        elevation={0}
+      <Box
         sx={{
           borderRadius: 3,
           border: "1px solid #e2e8f0",
           overflow: "hidden",
         }}
       >
-        <TableContainer>
-          <Table>
-            <TableHead sx={{ bgcolor: "#f8fafc" }}>
-              <TableRow>
-                <TableCell sx={{ fontWeight: 700 }}>Ad Soyad</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Kurumsal E-posta</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Görev Şubesi</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Tanımlanan Rol</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Kayıt Durumu</TableCell>
-                <TableCell sx={{ fontWeight: 700 }}>Davet Tarihi</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
-                    <CircularProgress size={28} />
-                  </TableCell>
-                </TableRow>
-              ) : list.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={6}
-                    align="center"
-                    sx={{ py: 3, color: "text.secondary" }}
-                  >
-                    Henüz davet edilmiş personel kaydı bulunmuyor.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                list.map((item) => (
-                  <TableRow key={item.id} hover>
-                    <TableCell
-                      sx={{ fontWeight: 600 }}
-                    >{`${item.name} ${item.surname}`}</TableCell>
-                    <TableCell>{item.email}</TableCell>
-                    <TableCell>
-                      {item.branch ? (
-                        <Chip
-                          label={`${item.branch.code} - ${item.branch.name}`}
-                          size="small"
-                          variant="outlined"
-                          sx={{ fontWeight: 600 }}
-                        />
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={
-                          item.role?.name
-                            ? roleDisplayNames[item.role.name] || item.role.name
-                            : "Rol Seçilmedi"
-                        }
-                        size="small"
-                        sx={{
-                          bgcolor: "#e3f2fd",
-                          color: "#1976d2",
-                          fontWeight: 700,
-                        }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={
-                          item.status === "COMPLETED"
-                            ? "Kayıt Tamamlandı"
-                            : "Aktivasyon Bekliyor"
-                        }
-                        size="small"
-                        color={
-                          item.status === "COMPLETED" ? "success" : "warning"
-                        }
-                        variant="outlined"
-                        sx={{ fontWeight: 600 }}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {new Date(item.createdAt).toLocaleDateString("tr-TR")}
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+        <div className="ag-theme-alpine" style={{ height: 450, width: "100%" }}>
+          <AgGridReact
+            rowData={list}
+            columnDefs={columnDefs}
+            loading={loading}
+            pagination={true}
+            paginationPageSize={10}
+            paginationPageSizeSelector={[10, 20, 50]}
+            animateRows={true}
+            overlayNoRowsTemplate="<span>Henüz davet edilmiş personel kaydı bulunmuyor.</span>"
+          />
+        </div>
+      </Box>
 
       {/* ŞUBE VE ROL SEÇİMLİ PERSONEL EKLEME MODALI */}
       <Dialog

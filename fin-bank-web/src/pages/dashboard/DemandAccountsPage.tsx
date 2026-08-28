@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Box,
@@ -7,13 +7,6 @@ import {
   Typography,
   Button,
   TextField,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   Chip,
   Tabs,
   Tab,
@@ -40,6 +33,8 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import { AgGridReact } from "ag-grid-react";
+import type { ColDef } from "ag-grid-community";
 import api from "../../services/api";
 import type { Customer } from "../../types/customer.types";
 import type {
@@ -292,12 +287,294 @@ export const DemandAccountsPage: React.FC = () => {
       // Durum değişikliği sonrası kesilen fişi göster
       handleOpenAccountReceipt(accountId);
 
-      if (selectedCustomer) loadAccounts(selectedCustomer.id);
+      // Hesap listesini anında yeniden çek
+      if (selectedCustomer) {
+        await loadAccounts(selectedCustomer.id);
+      }
     } catch (err: any) {
       alert(err.response?.data?.message || "İşlem başarısız.");
     }
   };
 
+  // SEKME 2: Mevcut Hesaplar Kolon Tanımları
+  const accountsManagementColumns = useMemo<ColDef<Account>[]>(
+    () => [
+      {
+        headerName: "Ek No",
+        field: "accountNumber",
+        flex: 1,
+        cellRenderer: (params: any) => (
+          <Typography sx={{ fontWeight: 600, fontSize: "0.875rem" }}>
+            {params.value}
+          </Typography>
+        ),
+      },
+      {
+        headerName: "Hesap Adı",
+        field: "name",
+        flex: 1.5,
+        cellRenderer: (params: any) => (
+          <Typography sx={{ fontWeight: 600, fontSize: "0.875rem" }}>
+            {params.value}
+          </Typography>
+        ),
+      },
+      {
+        headerName: "IBAN",
+        field: "iban",
+        flex: 2,
+        cellRenderer: (params: any) => (
+          <Typography sx={{ fontFamily: "monospace", fontSize: 13 }}>
+            {params.value}
+          </Typography>
+        ),
+      },
+      {
+        headerName: "Bakiye",
+        field: "balance",
+        flex: 1.2,
+        cellRenderer: (params: any) => (
+          <Typography
+            sx={{
+              fontWeight: 700,
+              color: "success.main",
+              fontSize: "0.875rem",
+            }}
+          >
+            {Number(params.value).toLocaleString("tr-TR", {
+              minimumFractionDigits: 2,
+            })}{" "}
+            {params.data?.currency?.code || "TRY"}
+          </Typography>
+        ),
+      },
+      {
+        headerName: "Durum",
+        field: "status",
+        flex: 1,
+        cellRenderer: (params: any) => {
+          const status = params.value;
+          return (
+            <Chip
+              label={
+                status === "ACTIVE"
+                  ? "Aktif"
+                  : status === "BLOCKED"
+                    ? "Bloke"
+                    : "Kapalı"
+              }
+              color={
+                status === "ACTIVE"
+                  ? "success"
+                  : status === "BLOCKED"
+                    ? "warning"
+                    : "default"
+              }
+              size="small"
+            />
+          );
+        },
+      },
+      {
+        headerName: "İşlemler",
+        field: "id",
+        flex: 1,
+        sortable: false,
+        filter: false,
+        cellClass: "ag-cell-center",
+        headerClass: "ag-header-cell-center",
+        cellRenderer: (params: any) => {
+          const acc = params.data as Account;
+          return (
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 1,
+                height: "100%",
+              }}
+            >
+              <Tooltip title="Son İşlem Fişini / Dekontu Yazdır">
+                <IconButton
+                  size="small"
+                  color="secondary"
+                  onClick={() => handleOpenAccountReceipt(acc.id)}
+                >
+                  <ReceiptLongIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+
+              {acc.status !== "CLOSED" && (
+                <Tooltip title="Hesap Adını Değiştir">
+                  <IconButton
+                    size="small"
+                    color="primary"
+                    onClick={() => {
+                      setAccountToEdit(acc);
+                      setEditAccountName(acc.name);
+                    }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+            </Box>
+          );
+        },
+      },
+    ],
+    [],
+  );
+
+  // SEKME 3: Hesap Durum & Kapatma Kolon Tanımları
+  const accountsStatusColumns = useMemo<ColDef<Account>[]>(
+    () => [
+      {
+        headerName: "Ek No",
+        field: "accountNumber",
+        flex: 1,
+        cellRenderer: (params: any) => (
+          <Typography sx={{ fontWeight: 600, fontSize: "0.875rem" }}>
+            {params.value}
+          </Typography>
+        ),
+      },
+      {
+        headerName: "Hesap Tanımı",
+        field: "name",
+        flex: 1.5,
+      },
+      {
+        headerName: "Bakiye",
+        field: "balance",
+        flex: 1.2,
+        cellRenderer: (params: any) => (
+          <Typography sx={{ fontWeight: 600, fontSize: "0.875rem" }}>
+            {Number(params.value).toLocaleString("tr-TR", {
+              minimumFractionDigits: 2,
+            })}{" "}
+            {params.data?.currency?.code || "TRY"}
+          </Typography>
+        ),
+      },
+      {
+        headerName: "Mevcut Durum",
+        field: "status",
+        flex: 1,
+        cellRenderer: (params: any) => {
+          const status = params.value;
+          const isClosed = status === "CLOSED";
+          const isBlocked = status === "BLOCKED";
+
+          return (
+            <Chip
+              label={isClosed ? "Kapalı" : isBlocked ? "Bloke" : "Aktif"}
+              color={isClosed ? "default" : isBlocked ? "warning" : "success"}
+              size="small"
+            />
+          );
+        },
+      },
+      {
+        headerName: "Durum Aksiyonları",
+        field: "id",
+        flex: 2,
+        sortable: false,
+        filter: false,
+        cellClass: "ag-cell-center",
+        headerClass: "ag-header-cell-center",
+        cellRenderer: (params: any) => {
+          const acc = params.data as Account;
+          const isClosed = acc.status === "CLOSED";
+          const isBlocked = acc.status === "BLOCKED";
+
+          if (isClosed) {
+            return (
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: 1,
+                  height: "100%",
+                }}
+              >
+                <Typography variant="caption" color="text.secondary">
+                  Kapatıldı
+                </Typography>
+                <Tooltip title="Kapanış Fişini Görüntüle">
+                  <IconButton
+                    size="small"
+                    color="secondary"
+                    onClick={() => handleOpenAccountReceipt(acc.id)}
+                  >
+                    <ReceiptLongIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            );
+          }
+
+          return (
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 1,
+                height: "100%",
+              }}
+            >
+              {isBlocked ? (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="success"
+                  startIcon={<CheckCircleIcon />}
+                  onClick={() => handleUpdateStatus(acc.id, "ACTIVE")}
+                  sx={{
+                    textTransform: "none",
+                    borderRadius: 1.5,
+                  }}
+                >
+                  Blokeyi Kaldır
+                </Button>
+              ) : (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  color="warning"
+                  startIcon={<BlockIcon />}
+                  onClick={() => handleUpdateStatus(acc.id, "BLOCKED")}
+                  sx={{
+                    textTransform: "none",
+                    borderRadius: 1.5,
+                  }}
+                >
+                  Bloke Et
+                </Button>
+              )}
+              <Button
+                size="small"
+                variant="outlined"
+                color="error"
+                startIcon={<CancelOutlinedIcon />}
+                onClick={() => setAccountToClose(acc)}
+                sx={{
+                  textTransform: "none",
+                  borderRadius: 1.5,
+                }}
+              >
+                Hesabı Kapat
+              </Button>
+            </Box>
+          );
+        },
+      },
+    ],
+    [],
+  );
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
@@ -520,300 +797,43 @@ export const DemandAccountsPage: React.FC = () => {
 
             {/* 2. SEKME: LİSTELEME & HESAP ADI GÜNCELLEME */}
             {activeTab === 1 && (
-              <TableContainer
-                component={Paper}
-                variant="outlined"
-                sx={{ borderRadius: 2 }}
+              <div
+                className="ag-theme-alpine"
+                style={{ height: 400, width: "100%" }}
               >
-                <Table>
-                  <TableHead sx={{ bgcolor: "#f8fafc" }}>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>Ek No</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Hesap Adı</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>IBAN</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Bakiye</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Durum</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="center">
-                        İşlemler
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {loadingAccounts ? (
-                      <TableRow>
-                        <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
-                          <CircularProgress size={28} />
-                        </TableCell>
-                      </TableRow>
-                    ) : accounts.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={6}
-                          align="center"
-                          sx={{ py: 3, color: "text.secondary" }}
-                        >
-                          Kayıtlı vadesiz hesap bulunamadı.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      accounts.map((acc) => (
-                        <TableRow key={acc.id} hover>
-                          <TableCell sx={{ fontWeight: 600 }}>
-                            {acc.accountNumber}
-                          </TableCell>
-                          <TableCell sx={{ fontWeight: 600 }}>
-                            {acc.name}
-                          </TableCell>
-                          <TableCell
-                            sx={{ fontFamily: "monospace", fontSize: 13 }}
-                          >
-                            {acc.iban}
-                          </TableCell>
-                          <TableCell
-                            sx={{ fontWeight: 700, color: "success.main" }}
-                          >
-                            {Number(acc.balance).toLocaleString("tr-TR", {
-                              minimumFractionDigits: 2,
-                            })}{" "}
-                            {acc.currency?.code || "TRY"}
-                          </TableCell>
-                          <TableCell>
-                            <Chip
-                              label={
-                                acc.status === "ACTIVE"
-                                  ? "Aktif"
-                                  : acc.status === "BLOCKED"
-                                    ? "Bloke"
-                                    : "Kapalı"
-                              }
-                              color={
-                                acc.status === "ACTIVE"
-                                  ? "success"
-                                  : acc.status === "BLOCKED"
-                                    ? "warning"
-                                    : "default"
-                              }
-                              size="small"
-                            />
-                          </TableCell>
-                          <TableCell align="center">
-                            <Box
-                              sx={{
-                                display: "flex",
-                                justifyContent: "center",
-                                gap: 1,
-                              }}
-                            >
-                              {/* Fiş / Dekont Butonu */}
-                              <Tooltip title="Son İşlem Fişini / Dekontu Yazdır">
-                                <IconButton
-                                  size="small"
-                                  color="secondary"
-                                  onClick={() =>
-                                    handleOpenAccountReceipt(acc.id)
-                                  }
-                                >
-                                  <ReceiptLongIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-
-                              {/* Düzenleme Butonu */}
-                              {acc.status !== "CLOSED" && (
-                                <Tooltip title="Hesap Adını Değiştir">
-                                  <IconButton
-                                    size="small"
-                                    color="primary"
-                                    onClick={() => {
-                                      setAccountToEdit(acc);
-                                      setEditAccountName(acc.name);
-                                    }}
-                                  >
-                                    <EditIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              )}
-                            </Box>
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                <AgGridReact
+                  rowData={accounts}
+                  columnDefs={accountsManagementColumns}
+                  loading={loadingAccounts}
+                  pagination={true}
+                  paginationPageSize={10}
+                  animateRows={true}
+                  overlayNoRowsTemplate="<span>Kayıtlı vadesiz hesap bulunamadı.</span>"
+                />
+              </div>
             )}
 
             {/* 3. SEKME: DURUM YÖNETİMİ & KAPATMA */}
             {activeTab === 2 && (
-              <TableContainer
-                component={Paper}
-                variant="outlined"
-                sx={{ borderRadius: 2 }}
+              <div
+                className="ag-theme-alpine"
+                style={{ height: 400, width: "100%" }}
               >
-                <Table>
-                  <TableHead sx={{ bgcolor: "#f8fafc" }}>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 700 }}>Ek No</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>
-                        Hesap Tanımı
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>Bakiye</TableCell>
-                      <TableCell sx={{ fontWeight: 700 }}>
-                        Mevcut Durum
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: 700 }} align="center">
-                        Durum Aksiyonları
-                      </TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {loadingAccounts ? (
-                      <TableRow>
-                        <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
-                          <CircularProgress size={28} />
-                        </TableCell>
-                      </TableRow>
-                    ) : accounts.length === 0 ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={5}
-                          align="center"
-                          sx={{ py: 3, color: "text.secondary" }}
-                        >
-                          Kayıtlı vadesiz hesap bulunamadı.
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      accounts.map((acc) => {
-                        const isClosed = acc.status === "CLOSED";
-                        const isBlocked = acc.status === "BLOCKED";
-
-                        return (
-                          <TableRow
-                            key={acc.id}
-                            hover
-                            sx={{ opacity: isClosed ? 0.6 : 1 }}
-                          >
-                            <TableCell sx={{ fontWeight: 600 }}>
-                              {acc.accountNumber}
-                            </TableCell>
-                            <TableCell>{acc.name}</TableCell>
-                            <TableCell sx={{ fontWeight: 600 }}>
-                              {Number(acc.balance).toLocaleString("tr-TR", {
-                                minimumFractionDigits: 2,
-                              })}{" "}
-                              {acc.currency?.code || "TRY"}
-                            </TableCell>
-                            <TableCell>
-                              <Chip
-                                label={
-                                  isClosed
-                                    ? "Kapalı"
-                                    : isBlocked
-                                      ? "Bloke"
-                                      : "Aktif"
-                                }
-                                color={
-                                  isClosed
-                                    ? "default"
-                                    : isBlocked
-                                      ? "warning"
-                                      : "success"
-                                }
-                                size="small"
-                              />
-                            </TableCell>
-                            <TableCell align="center">
-                              {isClosed ? (
-                                <Box
-                                  sx={{
-                                    display: "flex",
-                                    justifyContent: "center",
-                                    alignItems: "center",
-                                    gap: 1,
-                                  }}
-                                >
-                                  <Typography
-                                    variant="caption"
-                                    color="text.secondary"
-                                  >
-                                    Kapatıldı
-                                  </Typography>
-                                  <Tooltip title="Kapanış Fişini Görüntüle">
-                                    <IconButton
-                                      size="small"
-                                      color="secondary"
-                                      onClick={() =>
-                                        handleOpenAccountReceipt(acc.id)
-                                      }
-                                    >
-                                      <ReceiptLongIcon fontSize="small" />
-                                    </IconButton>
-                                  </Tooltip>
-                                </Box>
-                              ) : (
-                                <Box
-                                  sx={{
-                                    display: "flex",
-                                    justifyContent: "center",
-                                    gap: 1,
-                                  }}
-                                >
-                                  {isBlocked ? (
-                                    <Button
-                                      size="small"
-                                      variant="outlined"
-                                      color="success"
-                                      startIcon={<CheckCircleIcon />}
-                                      onClick={() =>
-                                        handleUpdateStatus(acc.id, "ACTIVE")
-                                      }
-                                      sx={{
-                                        textTransform: "none",
-                                        borderRadius: 1.5,
-                                      }}
-                                    >
-                                      Blokeyi Kaldır
-                                    </Button>
-                                  ) : (
-                                    <Button
-                                      size="small"
-                                      variant="outlined"
-                                      color="warning"
-                                      startIcon={<BlockIcon />}
-                                      onClick={() =>
-                                        handleUpdateStatus(acc.id, "BLOCKED")
-                                      }
-                                      sx={{
-                                        textTransform: "none",
-                                        borderRadius: 1.5,
-                                      }}
-                                    >
-                                      Bloke Et
-                                    </Button>
-                                  )}
-                                  <Button
-                                    size="small"
-                                    variant="outlined"
-                                    color="error"
-                                    startIcon={<CancelOutlinedIcon />}
-                                    onClick={() => setAccountToClose(acc)}
-                                    sx={{
-                                      textTransform: "none",
-                                      borderRadius: 1.5,
-                                    }}
-                                  >
-                                    Hesabı Kapat
-                                  </Button>
-                                </Box>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                <AgGridReact
+                  rowData={accounts}
+                  columnDefs={accountsStatusColumns}
+                  loading={loadingAccounts}
+                  pagination={true}
+                  paginationPageSize={10}
+                  animateRows={true}
+                  getRowStyle={(params) => {
+                    if (params.data?.status === "CLOSED") {
+                      return { opacity: 0.6 };
+                    }
+                  }}
+                  overlayNoRowsTemplate="<span>Kayıtlı vadesiz hesap bulunamadı.</span>"
+                />
+              </div>
             )}
           </CardContent>
         </Card>

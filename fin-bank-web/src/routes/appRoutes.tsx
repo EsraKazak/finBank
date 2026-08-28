@@ -87,7 +87,6 @@ export const router = createBrowserRouter([
               },
             ],
           },
-
           // Gişe İşlemleri Yetkisi
           {
             element: <RoleGuard requiredPermission="para:yatirma" />,
@@ -95,6 +94,24 @@ export const router = createBrowserRouter([
               {
                 path: "cashier",
                 element: <CashierPage />,
+                children: [
+                  {
+                    index: true,
+                    element: <Navigate to="withdraw" replace />,
+                  },
+                  {
+                    path: "withdraw",
+                    element: <CashierPage />,
+                  },
+                  {
+                    path: "deposit",
+                    element: <CashierPage />,
+                  },
+                  {
+                    path: "transfer",
+                    element: <CashierPage />,
+                  },
+                ],
               },
             ],
           },

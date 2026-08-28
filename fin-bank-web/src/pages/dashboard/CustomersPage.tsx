@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
@@ -7,13 +7,6 @@ import {
   Typography,
   Button,
   TextField,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Paper,
   Chip,
   Dialog,
   DialogTitle,
@@ -33,6 +26,8 @@ import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import SearchIcon from "@mui/icons-material/Search";
 import BadgeIcon from "@mui/icons-material/Badge";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import { AgGridReact } from "ag-grid-react";
+import type { ColDef } from "ag-grid-community";
 import api from "../../services/api";
 import type {
   Customer,
@@ -41,6 +36,7 @@ import type {
 } from "../../types/customer.types";
 import { isValidTurkishId } from "../../utils/identityValidator";
 import { useAuth } from "../../hooks/useAuth";
+import PaymentsIcon from "@mui/icons-material/Payments";
 
 export const CustomersPage: React.FC = () => {
   const { user } = useAuth();
@@ -124,13 +120,131 @@ export const CustomersPage: React.FC = () => {
     }
   };
 
-  const filteredCustomers = customers.filter(
-    (c) =>
-      c.identityNumber.includes(searchTerm) ||
-      c.customerNumber.toString().includes(searchTerm) ||
-      `${c.firstName} ${c.lastName}`
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()),
+  const filteredCustomers = useMemo(() => {
+    return customers.filter(
+      (c) =>
+        c.identityNumber.includes(searchTerm) ||
+        c.customerNumber.toString().includes(searchTerm) ||
+        `${c.firstName} ${c.lastName}`
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()),
+    );
+  }, [customers, searchTerm]);
+
+  // AG Grid Kolon Tanımları
+  const columnDefs = useMemo<ColDef<Customer>[]>(
+    () => [
+      {
+        headerName: "Müşteri No",
+        field: "customerNumber",
+        flex: 1,
+        cellRenderer: (params: any) => (
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              height: "100%",
+            }}
+          >
+            <BadgeIcon fontSize="small" color="primary" />
+            <Typography sx={{ fontWeight: 600, fontSize: "0.875rem" }}>
+              {params.value}
+            </Typography>
+          </Box>
+        ),
+      },
+      {
+        headerName: "T.C. Kimlik No",
+        field: "identityNumber",
+        flex: 1,
+      },
+      {
+        headerName: "Ad Soyad",
+        valueGetter: (params) =>
+          `${params.data?.firstName || ""} ${params.data?.lastName || ""}`,
+        cellStyle: { fontWeight: 600 },
+        flex: 1.2,
+      },
+      {
+        headerName: "Kayıt Şubesi",
+        field: "branch",
+        flex: 1.2,
+        cellRenderer: (params: any) => {
+          const branch = params.data?.branch;
+          return (
+            <Chip
+              label={`${branch?.code || ""} - ${branch?.name || "Bilinmiyor"}`}
+              size="small"
+              variant="outlined"
+            />
+          );
+        },
+      },
+      {
+        headerName: "Durum",
+        field: "isActive",
+        flex: 0.8,
+        cellRenderer: (params: any) => (
+          <Chip
+            label={params.value ? "Aktif" : "Pasif"}
+            color={params.value ? "success" : "default"}
+            size="small"
+          />
+        ),
+      },
+      {
+        headerName: "İşlemler",
+        field: "id",
+        flex: 1.2,
+        sortable: false,
+        filter: false,
+        cellClass: "ag-cell-center",
+        headerClass: "ag-header-cell-center",
+        cellRenderer: (params: any) => (
+          <Box
+            sx={{
+              display: "flex",
+              justifyContent: "center",
+              gap: 1,
+              alignItems: "center",
+              height: "100%",
+            }}
+          >
+            {/* 1. Vadesiz Hesaplar Butonu */}
+            <Tooltip title="Vadesiz Hesaplarını Yönet">
+              <IconButton
+                color="primary"
+                onClick={() =>
+                  navigate(
+                    `/dashboard/demand-accounts?customerId=${params.value}`,
+                  )
+                }
+                size="small"
+              >
+                <AccountBalanceWalletIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+
+            {/* 2. Gişe / Nakit Para İşlemleri Butonu */}
+            <Tooltip title="Gişe / Para İşlemleri Yap">
+              <IconButton
+                sx={{ color: "#16a34a" }}
+                onClick={() =>
+                  navigate(
+                    `/dashboard/cashier/withdraw?customerId=${params.value}`,
+                  )
+                }
+                size="small"
+              >
+                <PaymentsIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        ),
+      },
+    ],
+    [navigate],
   );
 
   return (
@@ -205,91 +319,27 @@ export const CustomersPage: React.FC = () => {
         </CardContent>
       </Card>
 
-      {/* Müşteri Tablosu */}
-      <TableContainer
-        component={Paper}
-        sx={{ borderRadius: 3, boxShadow: "0 2px 10px rgba(0,0,0,0.05)" }}
+      {/* AG Grid Müşteri Tablosu */}
+      <Card
+        sx={{
+          borderRadius: 3,
+          boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+          overflow: "hidden",
+        }}
       >
-        <Table>
-          <TableHead sx={{ bgcolor: "#f8fafc" }}>
-            <TableRow>
-              <TableCell sx={{ fontWeight: 700 }}>Müşteri No</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>T.C. Kimlik No</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Ad Soyad</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Kayıt Şubesi</TableCell>
-              <TableCell sx={{ fontWeight: 700 }}>Durum</TableCell>
-              <TableCell sx={{ fontWeight: 700 }} align="center">
-                Hesap Yönetimi
-              </TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                  <CircularProgress size={32} />
-                </TableCell>
-              </TableRow>
-            ) : filteredCustomers.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={6}
-                  align="center"
-                  sx={{ py: 4, color: "text.secondary" }}
-                >
-                  Kayıtlı müşteri bulunamadı.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredCustomers.map((customer) => (
-                <TableRow key={customer.id} hover>
-                  <TableCell>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <BadgeIcon fontSize="small" color="primary" />
-                      <Typography sx={{ fontWeight: 600 }}>
-                        {customer.customerNumber}
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  <TableCell>{customer.identityNumber}</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>
-                    {customer.firstName} {customer.lastName}
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={`${customer.branch?.code || ""} - ${customer.branch?.name || "Bilinmiyor"}`}
-                      size="small"
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      label={customer.isActive ? "Aktif" : "Pasif"}
-                      color={customer.isActive ? "success" : "default"}
-                      size="small"
-                    />
-                  </TableCell>
-                  <TableCell align="center">
-                    <Tooltip title="Vadesiz Hesaplarını Yönet">
-                      <IconButton
-                        color="primary"
-                        onClick={() =>
-                          navigate(
-                            `/dashboard/demand-accounts?customerId=${customer.id}`,
-                          )
-                        }
-                        size="small"
-                      >
-                        <AccountBalanceWalletIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
+        <div className="ag-theme-alpine" style={{ height: 500, width: "100%" }}>
+          <AgGridReact
+            rowData={filteredCustomers}
+            columnDefs={columnDefs}
+            loading={isLoading}
+            pagination={true}
+            paginationPageSize={10}
+            paginationPageSizeSelector={[10, 20, 50]}
+            animateRows={true}
+            overlayNoRowsTemplate="<span>Kayıtlı müşteri bulunamadı.</span>"
+          />
+        </div>
+      </Card>
 
       {/* YENİ MÜŞTERİ MODALI */}
       <Dialog

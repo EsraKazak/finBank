@@ -31,7 +31,8 @@ export const createManualRecordHandler = async (
   res: Response,
 ) => {
   try {
-    const { branchId, accountId, type, amount, description } = req.body;
+    const { branchId, accountId, targetAccountId, type, amount, description } =
+      req.body;
     const userId = (req as any).user?.id;
 
     if (!branchId || !type || amount === undefined || !description) {
@@ -45,6 +46,7 @@ export const createManualRecordHandler = async (
       branchId: Number(branchId),
       accountId: accountId ? Number(accountId) : undefined,
       type,
+      targetAccountId: targetAccountId ? Number(targetAccountId) : undefined,
       amount: Number(amount),
       description,
       userId,

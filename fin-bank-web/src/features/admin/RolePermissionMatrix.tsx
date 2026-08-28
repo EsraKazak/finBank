@@ -1,14 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Box,
-  Paper,
+  Card,
   Typography,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Chip,
   Button,
   IconButton,
@@ -19,7 +13,6 @@ import {
   FormControl,
   Select,
   MenuItem,
-  CircularProgress,
   Alert,
   FormGroup,
   FormControlLabel,
@@ -31,6 +24,8 @@ import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import SecurityRoundedIcon from "@mui/icons-material/SecurityRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import CancelRoundedIcon from "@mui/icons-material/CancelRounded";
+import { AgGridReact } from "ag-grid-react";
+import type { ColDef } from "ag-grid-community";
 import api from "../../services/api";
 import type {
   IAdminUserItem,
@@ -175,6 +170,272 @@ export const RolePermissionMatrix: React.FC = () => {
     }
   };
 
+  const columnDefs = useMemo<ColDef<IAdminUserItem>[]>(
+    () => [
+      {
+        headerName: "PERSONEL",
+        field: "name",
+        flex: 1.6,
+        cellRenderer: (params: any) => {
+          const u = params.data as IAdminUserItem;
+          if (!u) return null;
+          return (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+                height: "100%",
+              }}
+            >
+              <Avatar
+                sx={{
+                  width: 36,
+                  height: 36,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  bgcolor: "#0f172a",
+                  color: "#fff",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
+                }}
+              >
+                {u.name?.[0]}
+                {u.surname?.[0]}
+              </Avatar>
+              <Box
+                sx={{
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "center",
+                }}
+              >
+                <Typography
+                  sx={{
+                    fontWeight: 700,
+                    color: "#0f172a",
+                    fontSize: "0.875rem",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {u.name} {u.surname}
+                </Typography>
+                <Typography
+                  sx={{ color: "#64748b", fontSize: "0.75rem", mt: 0.2 }}
+                >
+                  Kayıt: {new Date(u.createdAt).toLocaleDateString("tr-TR")}
+                </Typography>
+              </Box>
+            </Box>
+          );
+        },
+      },
+      {
+        headerName: "KURUMSAL KİMLİK",
+        field: "email",
+        flex: 1.3,
+        cellRenderer: (params: any) => {
+          const val = params.value || params.data?.username;
+          return (
+            <Box sx={{ display: "flex", alignItems: "center", height: "100%" }}>
+              <Typography
+                sx={{ color: "#334155", fontSize: "0.85rem", fontWeight: 500 }}
+              >
+                {val}
+              </Typography>
+            </Box>
+          );
+        },
+      },
+      {
+        headerName: "GÜNCEL ROLÜ",
+        field: "userRole",
+        flex: 1.5,
+        cellRenderer: (params: any) => {
+          const u = params.data as IAdminUserItem;
+          const isEditing = editingUserId === u?.id;
+          const currentRoleName = u?.userRole?.role.name;
+
+          return (
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                height: "100%",
+                width: "100%",
+              }}
+            >
+              {isEditing ? (
+                <FormControl size="small" fullWidth>
+                  <Select
+                    value={selectedRoleId}
+                    onChange={(e) => setSelectedRoleId(e.target.value)}
+                    sx={{
+                      bgcolor: "#fff",
+                      fontSize: 13,
+                      height: 36,
+                      borderRadius: 1.5,
+                    }}
+                  >
+                    {roles.map((r) => (
+                      <MenuItem key={r.id} value={r.id} sx={{ fontSize: 13 }}>
+                        {roleDisplayNames[r.name] || r.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              ) : (
+                <Chip
+                  label={
+                    currentRoleName
+                      ? roleDisplayNames[currentRoleName] || currentRoleName
+                      : "Tanımsız"
+                  }
+                  size="small"
+                  sx={{
+                    fontWeight: 700,
+                    fontSize: 11,
+                    px: 0.5,
+                    bgcolor:
+                      currentRoleName === "YONETICI" ? "#fee2e2" : "#e0f2fe",
+                    color:
+                      currentRoleName === "YONETICI" ? "#991b1b" : "#0369a1",
+                    border: `1px solid ${
+                      currentRoleName === "YONETICI" ? "#fecaca" : "#bae6fd"
+                    }`,
+                  }}
+                />
+              )}
+            </Box>
+          );
+        },
+      },
+      {
+        headerName: "İSTİSNAİ YETKİLER",
+        field: "userPermissions",
+        flex: 1.2,
+        cellRenderer: (params: any) => {
+          const count = params.value?.length || 0;
+          return (
+            <Box sx={{ display: "flex", alignItems: "center", height: "100%" }}>
+              <Chip
+                label={count > 0 ? `+${count} Özel Yetki` : "Standart Yetki"}
+                size="small"
+                sx={{
+                  fontWeight: 600,
+                  fontSize: 11,
+                  bgcolor: count > 0 ? "#ede9fe" : "#f1f5f9",
+                  color: count > 0 ? "#6d28d9" : "#64748b",
+                  border: `1px solid ${count > 0 ? "#ddd6fe" : "#e2e8f0"}`,
+                }}
+              />
+            </Box>
+          );
+        },
+      },
+      {
+        headerName: "İŞLEMLER",
+        field: "id",
+        flex: 1.4,
+        sortable: false,
+        filter: false,
+        cellClass: "ag-cell-right",
+        headerClass: "ag-header-cell-right",
+        cellRenderer: (params: any) => {
+          const u = params.data as IAdminUserItem;
+          const isEditing = editingUserId === u?.id;
+
+          return (
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "flex-end",
+                alignItems: "center",
+                gap: 1,
+                height: "100%",
+              }}
+            >
+              {isEditing ? (
+                <>
+                  <Tooltip title="Kaydet">
+                    <IconButton
+                      size="small"
+                      color="primary"
+                      onClick={() => handlePromptConfirm(u)}
+                      disabled={selectedRoleId === u.userRole?.role.id}
+                      sx={{
+                        bgcolor: "#eff6ff",
+                        "&:hover": { bgcolor: "#dbeafe" },
+                      }}
+                    >
+                      <CheckCircleRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="İptal">
+                    <IconButton
+                      size="small"
+                      color="error"
+                      onClick={() => setEditingUserId(null)}
+                      sx={{
+                        bgcolor: "#fef2f2",
+                        "&:hover": { bgcolor: "#fee2e2" },
+                      }}
+                    >
+                      <CancelRoundedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </>
+              ) : (
+                <>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<EditRoundedIcon sx={{ fontSize: 14 }} />}
+                    onClick={() => handleStartEdit(u)}
+                    sx={{
+                      textTransform: "none",
+                      borderRadius: 1.5,
+                      fontWeight: 600,
+                      fontSize: 11,
+                      py: 0.3,
+                      px: 1,
+                      borderColor: "#cbd5e1",
+                      color: "#334155",
+                      "&:hover": {
+                        borderColor: "#94a3b8",
+                        bgcolor: "#f8fafc",
+                      },
+                    }}
+                  >
+                    Rol Değiştir
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<SecurityRoundedIcon sx={{ fontSize: 14 }} />}
+                    onClick={() => handleOpenPermModal(u)}
+                    sx={{
+                      textTransform: "none",
+                      borderRadius: 1.5,
+                      fontWeight: 600,
+                      fontSize: 11,
+                      py: 0.3,
+                      px: 1,
+                      bgcolor: "#0f172a",
+                      "&:hover": { bgcolor: "#1e293b" },
+                    }}
+                  >
+                    Yetkileri Yönet
+                  </Button>
+                </>
+              )}
+            </Box>
+          );
+        },
+      },
+    ],
+    [editingUserId, selectedRoleId, roles],
+  );
+
   return (
     <Box sx={{ width: "100%", pb: 3 }}>
       {/* BAŞLIK ALANI */}
@@ -198,302 +459,29 @@ export const RolePermissionMatrix: React.FC = () => {
         </Alert>
       )}
 
-      {/* TABLO */}
-      <Paper
-        elevation={0}
+      {/* AG GRID KARTI */}
+      <Card
         sx={{
-          borderRadius: 2.5,
+          borderRadius: 3,
+          boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
           border: "1px solid #e2e8f0",
           overflow: "hidden",
         }}
       >
-        <TableContainer>
-          <Table size="small">
-            <TableHead sx={{ bgcolor: "#f8fafc" }}>
-              <TableRow>
-                <TableCell
-                  sx={{
-                    fontWeight: 700,
-                    color: "#475569",
-                    fontSize: 12,
-                    py: 1.5,
-                  }}
-                >
-                  PERSONEL
-                </TableCell>
-                <TableCell
-                  sx={{
-                    fontWeight: 700,
-                    color: "#475569",
-                    fontSize: 12,
-                    py: 1.5,
-                  }}
-                >
-                  KURUMSAL KİMLİK
-                </TableCell>
-                <TableCell
-                  sx={{
-                    fontWeight: 700,
-                    color: "#475569",
-                    fontSize: 12,
-                    py: 1.5,
-                  }}
-                >
-                  GÜNCEL ROLÜ
-                </TableCell>
-                <TableCell
-                  sx={{
-                    fontWeight: 700,
-                    color: "#475569",
-                    fontSize: 12,
-                    py: 1.5,
-                  }}
-                >
-                  İSTİSNAİ YETKİLER
-                </TableCell>
-                <TableCell
-                  align="right"
-                  sx={{
-                    fontWeight: 700,
-                    color: "#475569",
-                    fontSize: 12,
-                    py: 1.5,
-                  }}
-                >
-                  İŞLEMLER
-                </TableCell>
-              </TableRow>
-            </TableHead>
-
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
-                    <CircularProgress size={26} thickness={4} />
-                  </TableCell>
-                </TableRow>
-              ) : users.length === 0 ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={5}
-                    align="center"
-                    sx={{ py: 3, color: "text.secondary", fontSize: 13 }}
-                  >
-                    Sistemde kayıtlı personel bulunamadı.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                users.map((u) => {
-                  const isEditing = editingUserId === u.id;
-                  const currentRoleName = u.userRole?.role.name;
-                  const extraPermsCount = u.userPermissions?.length || 0;
-
-                  return (
-                    <TableRow
-                      key={u.id}
-                      hover
-                      sx={{
-                        bgcolor: isEditing ? "#f0f7ff" : "inherit",
-                      }}
-                    >
-                      <TableCell sx={{ py: 1.5 }}>
-                        <Box
-                          sx={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 1.2,
-                          }}
-                        >
-                          <Avatar
-                            sx={{
-                              width: 32,
-                              height: 32,
-                              fontSize: 12,
-                              fontWeight: 700,
-                              bgcolor: "#0a192f",
-                            }}
-                          >
-                            {u.name?.[0]}
-                            {u.surname?.[0]}
-                          </Avatar>
-                          <Box>
-                            <Typography
-                              variant="body2"
-                              sx={{
-                                fontWeight: 700,
-                                color: "#0f172a",
-                                fontSize: 13,
-                              }}
-                            >
-                              {u.name} {u.surname}
-                            </Typography>
-                            <Typography
-                              variant="caption"
-                              sx={{ color: "#94a3b8", fontSize: 11 }}
-                            >
-                              Kayıt:{" "}
-                              {new Date(u.createdAt).toLocaleDateString(
-                                "tr-TR",
-                              )}
-                            </Typography>
-                          </Box>
-                        </Box>
-                      </TableCell>
-
-                      <TableCell sx={{ color: "#334155", fontSize: 13 }}>
-                        {u.email || u.username}
-                      </TableCell>
-
-                      <TableCell sx={{ minWidth: 180 }}>
-                        {isEditing ? (
-                          <FormControl size="small" fullWidth>
-                            <Select
-                              value={selectedRoleId}
-                              onChange={(e) =>
-                                setSelectedRoleId(e.target.value)
-                              }
-                              sx={{ bgcolor: "#fff", fontSize: 13 }}
-                            >
-                              {roles.map((r) => (
-                                <MenuItem
-                                  key={r.id}
-                                  value={r.id}
-                                  sx={{ fontSize: 13 }}
-                                >
-                                  {roleDisplayNames[r.name] || r.name}
-                                </MenuItem>
-                              ))}
-                            </Select>
-                          </FormControl>
-                        ) : (
-                          <Chip
-                            label={
-                              currentRoleName
-                                ? roleDisplayNames[currentRoleName] ||
-                                  currentRoleName
-                                : "Tanımsız"
-                            }
-                            size="small"
-                            sx={{
-                              fontWeight: 600,
-                              fontSize: 11,
-                              bgcolor:
-                                currentRoleName === "YONETICI"
-                                  ? "#fee2e2"
-                                  : "#e0f2fe",
-                              color:
-                                currentRoleName === "YONETICI"
-                                  ? "#991b1b"
-                                  : "#0369a1",
-                            }}
-                          />
-                        )}
-                      </TableCell>
-
-                      <TableCell>
-                        <Chip
-                          label={
-                            extraPermsCount > 0
-                              ? `+${extraPermsCount} Özel Yetki`
-                              : "Standart Yetki"
-                          }
-                          size="small"
-                          sx={{
-                            fontWeight: 600,
-                            fontSize: 11,
-                            bgcolor:
-                              extraPermsCount > 0 ? "#ede9fe" : "#f1f5f9",
-                            color: extraPermsCount > 0 ? "#6d28d9" : "#64748b",
-                          }}
-                        />
-                      </TableCell>
-
-                      <TableCell align="right">
-                        {isEditing ? (
-                          <Box
-                            sx={{
-                              display: "flex",
-                              justifyContent: "flex-end",
-                              gap: 0.5,
-                            }}
-                          >
-                            <Tooltip title="Kaydet">
-                              <IconButton
-                                size="small"
-                                color="primary"
-                                onClick={() => handlePromptConfirm(u)}
-                                disabled={
-                                  selectedRoleId === u.userRole?.role.id
-                                }
-                              >
-                                <CheckCircleRoundedIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="İptal">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => setEditingUserId(null)}
-                              >
-                                <CancelRoundedIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </Box>
-                        ) : (
-                          <Box
-                            sx={{
-                              display: "flex",
-                              justifyContent: "flex-end",
-                              gap: 1,
-                            }}
-                          >
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              startIcon={
-                                <EditRoundedIcon sx={{ fontSize: 14 }} />
-                              }
-                              onClick={() => handleStartEdit(u)}
-                              sx={{
-                                textTransform: "none",
-                                borderRadius: 1.5,
-                                fontWeight: 600,
-                                fontSize: 11,
-                                py: 0.4,
-                              }}
-                            >
-                              Rol Değiştir
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="contained"
-                              startIcon={
-                                <SecurityRoundedIcon sx={{ fontSize: 14 }} />
-                              }
-                              onClick={() => handleOpenPermModal(u)}
-                              sx={{
-                                textTransform: "none",
-                                borderRadius: 1.5,
-                                fontWeight: 600,
-                                fontSize: 11,
-                                py: 0.4,
-                                bgcolor: "#0a192f",
-                                "&:hover": { bgcolor: "#1e293b" },
-                              }}
-                            >
-                              Yetkileri Yönet
-                            </Button>
-                          </Box>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
+        <div className="ag-theme-alpine" style={{ height: 500, width: "100%" }}>
+          <AgGridReact
+            rowData={users}
+            columnDefs={columnDefs}
+            loading={loading}
+            rowHeight={64}
+            pagination={true}
+            paginationPageSize={10}
+            paginationPageSizeSelector={[10, 20, 50]}
+            animateRows={true}
+            overlayNoRowsTemplate="<span>Sistemde kayıtlı personel bulunamadı.</span>"
+          />
+        </div>
+      </Card>
 
       {/* ROL DEĞİŞİKLİĞİ ONAY MODALI */}
       <Dialog
@@ -501,6 +489,7 @@ export const RolePermissionMatrix: React.FC = () => {
         onClose={() => setConfirmDialog((p) => ({ ...p, open: false }))}
         maxWidth="xs"
         fullWidth
+        slotProps={{ paper: { sx: { borderRadius: 3, p: 1 } } }}
       >
         <DialogTitle sx={{ fontWeight: 700, fontSize: 16 }}>
           Rol Değişikliği Onayı
@@ -510,7 +499,7 @@ export const RolePermissionMatrix: React.FC = () => {
             <strong>{confirmDialog.userName}</strong> kullanıcısının yeni rolü{" "}
             <strong>{confirmDialog.roleName}</strong> olarak güncellenecektir.
           </Typography>
-          <Alert severity="warning" sx={{ fontSize: 12 }}>
+          <Alert severity="warning" sx={{ fontSize: 12, borderRadius: 2 }}>
             Bu işlem personelin sistem izinlerini anında günceller.
           </Alert>
         </DialogContent>
@@ -539,6 +528,7 @@ export const RolePermissionMatrix: React.FC = () => {
         onClose={() => setPermModalUser(null)}
         maxWidth="xs"
         fullWidth
+        slotProps={{ paper: { sx: { borderRadius: 3, p: 1 } } }}
       >
         <DialogTitle
           sx={{

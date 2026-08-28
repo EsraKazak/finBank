@@ -30,7 +30,7 @@ app.use(
         callback(new Error("CORS policy error: Origin not allowed."));
       }
     },
-    credentials: true, // Cookie transferine izin verir
+    credentials: true, // Cookielerin gönderilmesine izin verir
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   }),
