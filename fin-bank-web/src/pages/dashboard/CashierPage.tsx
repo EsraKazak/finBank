@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Box, Typography, Tabs, Tab, Alert, Card } from "@mui/material";
-import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
-import SavingsRoundedIcon from "@mui/icons-material/SavingsRounded";
-import SwapHorizRoundedIcon from "@mui/icons-material/SwapHorizRounded";
 import { CustomerSearchCard } from "../../components/common/CustomerSearchCard";
 import { WithdrawalPage } from "./WithdrawalPage";
 import { DepositPage } from "./DepositPage";
@@ -95,20 +92,14 @@ export const CashierPage: React.FC = () => {
               sx={{ px: 2, pt: 1, borderBottom: "1px solid #e2e8f0" }}
             >
               <Tab
-                icon={<PaymentsRoundedIcon />}
-                iconPosition="start"
                 label="Para Çekme (Ödeme)"
                 sx={{ textTransform: "none", fontWeight: 700 }}
               />
               <Tab
-                icon={<SavingsRoundedIcon />}
-                iconPosition="start"
                 label="Para Yatırma (Tahsilat)"
                 sx={{ textTransform: "none", fontWeight: 700 }}
               />
               <Tab
-                icon={<SwapHorizRoundedIcon />}
-                iconPosition="start"
                 label="Hesaplar Arası Virman"
                 sx={{ textTransform: "none", fontWeight: 700 }}
               />
