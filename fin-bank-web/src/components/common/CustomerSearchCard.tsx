@@ -10,10 +10,8 @@ import {
   CircularProgress,
   Chip,
   Alert,
-  Tooltip,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import CheckCircleOutlineRoundedIcon from "@mui/icons-material/CheckCircleOutlineRounded";
 import api from "../../services/api";
 import type { Customer } from "../../types/customer.types";
