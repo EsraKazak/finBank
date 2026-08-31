@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Box,
@@ -7,16 +7,13 @@ import {
   Typography,
   Button,
   TextField,
-  Chip,
   Tabs,
   Tab,
   Alert,
   CircularProgress,
-  InputAdornment,
   IconButton,
   Tooltip,
   Dialog,
-  DialogTitle,
   DialogContent,
   DialogActions,
   FormControl,
@@ -24,17 +21,10 @@ import {
   Select,
   MenuItem,
 } from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
-import PersonIcon from "@mui/icons-material/Person";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import EditIcon from "@mui/icons-material/Edit";
-import BlockIcon from "@mui/icons-material/Block";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
-import { AgGridReact } from "ag-grid-react";
-import type { ColDef } from "ag-grid-community";
 import api from "../../services/api";
 import type { Customer } from "../../types/customer.types";
 import type {
@@ -46,18 +36,14 @@ import type {
 } from "../../types/account.types";
 import { ReceiptPrintModal } from "../../components/ReceiptPrintModal";
 import type { IReceiptData } from "../../components/ReceiptPrintModal";
+import { CustomerSearchCard } from "../../components/common/CustomerSearchCard";
+import { CustomerAccountsGrid } from "../../components/common/CustomerAccountsGrid";
 
 export const DemandAccountsPage: React.FC = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const customerIdParam = searchParams.get("customerId");
-
-  const [searchQuery, setSearchQuery] = useState("");
-  const [isSearching, setIsSearching] = useState(false);
+  const [searchParams] = useSearchParams();
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
     null,
   );
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [activeTab, setActiveTab] = useState(0);
 
   // Form State'leri
@@ -69,12 +55,11 @@ export const DemandAccountsPage: React.FC = () => {
   const [selectedCurrencyId, setSelectedCurrencyId] = useState<number | "">("");
   const [demandProductId, setDemandProductId] = useState<number | null>(null);
 
-  // Güncelleme Modal State
-  const [accountToEdit, setAccountToEdit] = useState<Account | null>(null);
-  const [editAccountName, setEditAccountName] = useState("");
-
   // Kapatma Modal State
   const [accountToClose, setAccountToClose] = useState<Account | null>(null);
+  const [targetAccountıd, setTargetAccount] = useState<number | null>(null);
+  const [customerAccounts, setCustomerAccounts] = useState<Account[]>([]);
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   // Fiş / Dekont Yazdırma Modal State'leri
   const [openReceiptModal, setOpenReceiptModal] = useState<boolean>(false);
@@ -87,7 +72,51 @@ export const DemandAccountsPage: React.FC = () => {
     message: string;
   } | null>(null);
 
-  // Parametreleri (Ürünler ve Para Birimleri) Çek
+  // 1. URL'den customerId gelmişse müşteriyi otomatik yükle
+  useEffect(() => {
+    const customerIdParam = searchParams.get("customerId");
+    if (customerIdParam) {
+      const fetchCustomerFromUrl = async () => {
+        try {
+          const res = await api.get<{ success: boolean; data: Customer[] }>(
+            "/customers",
+          );
+          const foundCustomer = (res.data.data || []).find(
+            (c) => c.id === Number(customerIdParam),
+          );
+          if (foundCustomer) {
+            setSelectedCustomer(foundCustomer);
+          }
+        } catch (err) {
+          console.error("URL'den gelen müşteri yüklenemedi:", err);
+        }
+      };
+
+      fetchCustomerFromUrl();
+    }
+  }, [searchParams]);
+
+  // 2. Müşteri seçildiğinde veya tablo yenilendiğinde hesapları çek
+  useEffect(() => {
+    const fetchCustomerAccounts = async () => {
+      if (!selectedCustomer) return;
+      try {
+        const res = await api.get<{ success: boolean; data: Account[] }>(
+          `/accounts/customer/${selectedCustomer.id}`,
+        );
+        const demandAccounts = (res.data.data || []).filter(
+          (a) => a.product?.type === "DEMAND",
+        );
+        setCustomerAccounts(demandAccounts);
+      } catch (err) {
+        console.error("Hesaplar yüklenemedi:", err);
+      }
+    };
+
+    fetchCustomerAccounts();
+  }, [selectedCustomer, refreshTrigger]);
+
+  // 3. Parametreleri (Ürünler ve Para Birimleri) Çek
   useEffect(() => {
     const fetchParams = async () => {
       try {
@@ -117,87 +146,6 @@ export const DemandAccountsPage: React.FC = () => {
     fetchParams();
   }, []);
 
-  // URL'den Müşteri ID gelmişse otomatik yükle
-  useEffect(() => {
-    if (customerIdParam) {
-      loadCustomerById(Number(customerIdParam));
-    }
-  }, [customerIdParam]);
-
-  const loadCustomerById = async (id: number) => {
-    try {
-      setIsSearching(true);
-      const res = await api.get<{ success: boolean; data: Customer[] }>(
-        "/customers",
-      );
-      const found = res.data.data.find((c) => c.id === id);
-      if (found) {
-        setSelectedCustomer(found);
-        setOpenAccountName(`${found.firstName} Vadesiz Hesap`);
-        loadAccounts(found.id);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const handleSearchCustomer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-
-    try {
-      setIsSearching(true);
-      setNotification(null);
-      const res = await api.get<{ success: boolean; data: Customer[] }>(
-        "/customers",
-      );
-      const found = res.data.data.find(
-        (c) =>
-          c.identityNumber === searchQuery.trim() ||
-          c.customerNumber.toString() === searchQuery.trim(),
-      );
-
-      if (found) {
-        setSelectedCustomer(found);
-        setSearchParams({ customerId: found.id.toString() });
-        setOpenAccountName(`${found.firstName} Vadesiz Hesap`);
-        loadAccounts(found.id);
-      } else {
-        setNotification({
-          type: "error",
-          message:
-            "Müşteri bulunamadı. Lütfen TC veya Müşteri No kontrol ediniz.",
-        });
-      }
-    } catch (err: any) {
-      setNotification({
-        type: "error",
-        message: "Arama sırasında bir hata oluştu.",
-      });
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const loadAccounts = async (customerId: number) => {
-    try {
-      setLoadingAccounts(true);
-      const res = await api.get<{ success: boolean; data: Account[] }>(
-        `/accounts/customer/${customerId}`,
-      );
-      const vadesizler = res.data.data.filter(
-        (a) => a.product?.type === "DEMAND",
-      );
-      setAccounts(vadesizler);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoadingAccounts(false);
-    }
-  };
-
   // Hesabın son kesilen fişini yükleyip modalı açan fonksiyon
   const handleOpenAccountReceipt = async (accountId: number) => {
     try {
@@ -209,7 +157,7 @@ export const DemandAccountsPage: React.FC = () => {
       } else {
         alert("Bu hesaba ait henüz bir işlem fişi bulunmuyor.");
       }
-    } catch (error) {
+    } catch {
       alert("Fiş yüklenirken bir hata oluştu.");
     }
   };
@@ -239,13 +187,12 @@ export const DemandAccountsPage: React.FC = () => {
         message: "Vadesiz hesap başarıyla açıldı.",
       });
 
-      // Açılan hesabın fişini hemen getirip modalı aç
       const newAccountId = createRes.data.data?.id || createRes.data.id;
       if (newAccountId) {
         handleOpenAccountReceipt(newAccountId);
       }
 
-      loadAccounts(selectedCustomer.id);
+      setRefreshTrigger((prev) => prev + 1);
       setActiveTab(1);
     } catch (err: any) {
       setNotification({
@@ -257,22 +204,7 @@ export const DemandAccountsPage: React.FC = () => {
     }
   };
 
-  // Hesap Adı Güncelleme
-  const handleSaveRename = async () => {
-    if (!accountToEdit || !editAccountName.trim()) return;
-    try {
-      await api.patch(`/accounts/${accountToEdit.id}/name`, {
-        name: editAccountName,
-      });
-      setNotification({ type: "success", message: "Hesap adı güncellendi." });
-      setAccountToEdit(null);
-      if (selectedCustomer) loadAccounts(selectedCustomer.id);
-    } catch (err: any) {
-      alert(err.response?.data?.message || "Güncelleme başarısız.");
-    }
-  };
-
-  // Durum Değiştirme (Bloke / Kapatma)
+  // Durum Değiştirme (Kapatma vb.)
   const handleUpdateStatus = async (
     accountId: number,
     status: AccountStatus,
@@ -284,297 +216,13 @@ export const DemandAccountsPage: React.FC = () => {
         message: "Hesap durumu başarıyla güncellendi.",
       });
 
-      // Durum değişikliği sonrası kesilen fişi göster
       handleOpenAccountReceipt(accountId);
-
-      // Hesap listesini anında yeniden çek
-      if (selectedCustomer) {
-        await loadAccounts(selectedCustomer.id);
-      }
+      setRefreshTrigger((prev) => prev + 1);
     } catch (err: any) {
       alert(err.response?.data?.message || "İşlem başarısız.");
     }
   };
 
-  // SEKME 2: Mevcut Hesaplar Kolon Tanımları
-  const accountsManagementColumns = useMemo<ColDef<Account>[]>(
-    () => [
-      {
-        headerName: "Ek No",
-        field: "accountNumber",
-        flex: 1,
-        cellRenderer: (params: any) => (
-          <Typography sx={{ fontWeight: 600, fontSize: "0.875rem" }}>
-            {params.value}
-          </Typography>
-        ),
-      },
-      {
-        headerName: "Hesap Adı",
-        field: "name",
-        flex: 1.5,
-        cellRenderer: (params: any) => (
-          <Typography sx={{ fontWeight: 600, fontSize: "0.875rem" }}>
-            {params.value}
-          </Typography>
-        ),
-      },
-      {
-        headerName: "IBAN",
-        field: "iban",
-        flex: 2,
-        cellRenderer: (params: any) => (
-          <Typography sx={{ fontFamily: "monospace", fontSize: 13 }}>
-            {params.value}
-          </Typography>
-        ),
-      },
-      {
-        headerName: "Bakiye",
-        field: "balance",
-        flex: 1.2,
-        cellRenderer: (params: any) => (
-          <Typography
-            sx={{
-              fontWeight: 700,
-              color: "success.main",
-              fontSize: "0.875rem",
-            }}
-          >
-            {Number(params.value).toLocaleString("tr-TR", {
-              minimumFractionDigits: 2,
-            })}{" "}
-            {params.data?.currency?.code || "TRY"}
-          </Typography>
-        ),
-      },
-      {
-        headerName: "Durum",
-        field: "status",
-        flex: 1,
-        cellRenderer: (params: any) => {
-          const status = params.value;
-          return (
-            <Chip
-              label={
-                status === "ACTIVE"
-                  ? "Aktif"
-                  : status === "BLOCKED"
-                    ? "Bloke"
-                    : "Kapalı"
-              }
-              color={
-                status === "ACTIVE"
-                  ? "success"
-                  : status === "BLOCKED"
-                    ? "warning"
-                    : "default"
-              }
-              size="small"
-            />
-          );
-        },
-      },
-      {
-        headerName: "İşlemler",
-        field: "id",
-        flex: 1,
-        sortable: false,
-        filter: false,
-        cellClass: "ag-cell-center",
-        headerClass: "ag-header-cell-center",
-        cellRenderer: (params: any) => {
-          const acc = params.data as Account;
-          return (
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: 1,
-                height: "100%",
-              }}
-            >
-              <Tooltip title="Son İşlem Fişini / Dekontu Yazdır">
-                <IconButton
-                  size="small"
-                  color="secondary"
-                  onClick={() => handleOpenAccountReceipt(acc.id)}
-                >
-                  <ReceiptLongIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-
-              {acc.status !== "CLOSED" && (
-                <Tooltip title="Hesap Adını Değiştir">
-                  <IconButton
-                    size="small"
-                    color="primary"
-                    onClick={() => {
-                      setAccountToEdit(acc);
-                      setEditAccountName(acc.name);
-                    }}
-                  >
-                    <EditIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              )}
-            </Box>
-          );
-        },
-      },
-    ],
-    [],
-  );
-
-  // SEKME 3: Hesap Durum & Kapatma Kolon Tanımları
-  const accountsStatusColumns = useMemo<ColDef<Account>[]>(
-    () => [
-      {
-        headerName: "Ek No",
-        field: "accountNumber",
-        flex: 1,
-        cellRenderer: (params: any) => (
-          <Typography sx={{ fontWeight: 600, fontSize: "0.875rem" }}>
-            {params.value}
-          </Typography>
-        ),
-      },
-      {
-        headerName: "Hesap Tanımı",
-        field: "name",
-        flex: 1.5,
-      },
-      {
-        headerName: "Bakiye",
-        field: "balance",
-        flex: 1.2,
-        cellRenderer: (params: any) => (
-          <Typography sx={{ fontWeight: 600, fontSize: "0.875rem" }}>
-            {Number(params.value).toLocaleString("tr-TR", {
-              minimumFractionDigits: 2,
-            })}{" "}
-            {params.data?.currency?.code || "TRY"}
-          </Typography>
-        ),
-      },
-      {
-        headerName: "Mevcut Durum",
-        field: "status",
-        flex: 1,
-        cellRenderer: (params: any) => {
-          const status = params.value;
-          const isClosed = status === "CLOSED";
-          const isBlocked = status === "BLOCKED";
-
-          return (
-            <Chip
-              label={isClosed ? "Kapalı" : isBlocked ? "Bloke" : "Aktif"}
-              color={isClosed ? "default" : isBlocked ? "warning" : "success"}
-              size="small"
-            />
-          );
-        },
-      },
-      {
-        headerName: "Durum Aksiyonları",
-        field: "id",
-        flex: 2,
-        sortable: false,
-        filter: false,
-        cellClass: "ag-cell-center",
-        headerClass: "ag-header-cell-center",
-        cellRenderer: (params: any) => {
-          const acc = params.data as Account;
-          const isClosed = acc.status === "CLOSED";
-          const isBlocked = acc.status === "BLOCKED";
-
-          if (isClosed) {
-            return (
-              <Box
-                sx={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  gap: 1,
-                  height: "100%",
-                }}
-              >
-                <Typography variant="caption" color="text.secondary">
-                  Kapatıldı
-                </Typography>
-                <Tooltip title="Kapanış Fişini Görüntüle">
-                  <IconButton
-                    size="small"
-                    color="secondary"
-                    onClick={() => handleOpenAccountReceipt(acc.id)}
-                  >
-                    <ReceiptLongIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-            );
-          }
-
-          return (
-            <Box
-              sx={{
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: 1,
-                height: "100%",
-              }}
-            >
-              {isBlocked ? (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="success"
-                  startIcon={<CheckCircleIcon />}
-                  onClick={() => handleUpdateStatus(acc.id, "ACTIVE")}
-                  sx={{
-                    textTransform: "none",
-                    borderRadius: 1.5,
-                  }}
-                >
-                  Blokeyi Kaldır
-                </Button>
-              ) : (
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="warning"
-                  startIcon={<BlockIcon />}
-                  onClick={() => handleUpdateStatus(acc.id, "BLOCKED")}
-                  sx={{
-                    textTransform: "none",
-                    borderRadius: 1.5,
-                  }}
-                >
-                  Bloke Et
-                </Button>
-              )}
-              <Button
-                size="small"
-                variant="outlined"
-                color="error"
-                startIcon={<CancelOutlinedIcon />}
-                onClick={() => setAccountToClose(acc)}
-                sx={{
-                  textTransform: "none",
-                  borderRadius: 1.5,
-                }}
-              >
-                Hesabı Kapat
-              </Button>
-            </Box>
-          );
-        },
-      },
-    ],
-    [],
-  );
   return (
     <Box sx={{ p: 3 }}>
       <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
@@ -596,107 +244,10 @@ export const DemandAccountsPage: React.FC = () => {
       )}
 
       {/* MÜŞTERİ ARAMA KARTI */}
-      <Card
-        sx={{
-          mb: 3,
-          borderRadius: 3,
-          boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-        }}
-      >
-        <CardContent sx={{ p: 2.5 }}>
-          <form onSubmit={handleSearchCustomer}>
-            <Box sx={{ display: "flex", gap: 2 }}>
-              <TextField
-                fullWidth
-                size="small"
-                placeholder="Müşteri çağırmak için 11 Haneli T.C. Kimlik No veya 8 Haneli Müşteri No giriniz..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                slotProps={{
-                  input: {
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon color="action" />
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-              />
-              <Button
-                type="submit"
-                variant="contained"
-                disabled={isSearching}
-                sx={{
-                  minWidth: 130,
-                  borderRadius: 2,
-                  textTransform: "none",
-                  fontWeight: 600,
-                }}
-              >
-                {isSearching ? (
-                  <CircularProgress size={22} color="inherit" />
-                ) : (
-                  "Müşteri Bul"
-                )}
-              </Button>
-            </Box>
-          </form>
-
-          {/* Seçili Müşteri Özet Paneli */}
-          {selectedCustomer && (
-            <Box
-              sx={{
-                mt: 2.5,
-                p: 2,
-                borderRadius: 2,
-                bgcolor: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                flexWrap: "wrap",
-                gap: 2,
-              }}
-            >
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                <Box
-                  sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 2,
-                    bgcolor: "#e0f2fe",
-                    color: "#0284c7",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <PersonIcon />
-                </Box>
-                <div>
-                  <Typography
-                    variant="subtitle1"
-                    sx={{ fontWeight: 700, color: "#0f172a" }}
-                  >
-                    {selectedCustomer.firstName} {selectedCustomer.lastName}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Müşteri No:{" "}
-                    <strong>{selectedCustomer.customerNumber}</strong> | T.C.:{" "}
-                    <strong>{selectedCustomer.identityNumber}</strong>
-                  </Typography>
-                </div>
-              </Box>
-
-              <Chip
-                label={`Kayıt Şubesi: ${selectedCustomer.branch?.code || ""} - ${selectedCustomer.branch?.name || ""}`}
-                variant="outlined"
-                sx={{ fontWeight: 600 }}
-              />
-            </Box>
-          )}
-        </CardContent>
-      </Card>
+      <CustomerSearchCard
+        selectedCustomer={selectedCustomer}
+        onSelectCustomer={(c) => setSelectedCustomer(c)}
+      />
 
       {/* İŞLEM SEKMELERİ */}
       {selectedCustomer ? (
@@ -795,45 +346,74 @@ export const DemandAccountsPage: React.FC = () => {
               </form>
             )}
 
-            {/* 2. SEKME: LİSTELEME & HESAP ADI GÜNCELLEME */}
+            {/* 2. SEKME: GÜNCELLEME */}
             {activeTab === 1 && (
-              <div
-                className="ag-theme-alpine"
-                style={{ height: 400, width: "100%" }}
-              >
-                <AgGridReact
-                  rowData={accounts}
-                  columnDefs={accountsManagementColumns}
-                  loading={loadingAccounts}
-                  pagination={true}
-                  paginationPageSize={10}
-                  animateRows={true}
-                  overlayNoRowsTemplate="<span>Kayıtlı vadesiz hesap bulunamadı.</span>"
-                />
-              </div>
+              <CustomerAccountsGrid
+                customerId={selectedCustomer.id}
+                title="Kayıtlı Vadesiz Hesaplar ve Güncelleme"
+                includeClosed={false}
+                allowRename={true}
+                allowStatusToggle={true}
+                refreshTrigger={refreshTrigger}
+                height={380}
+                renderActions={(acc) => (
+                  <Tooltip title="Son İşlem Fişini / Dekontu Yazdır">
+                    <IconButton
+                      size="small"
+                      color="secondary"
+                      onClick={() => handleOpenAccountReceipt(acc.id)}
+                    >
+                      <ReceiptLongIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
+              />
             )}
 
-            {/* 3. SEKME: DURUM YÖNETİMİ & KAPATMA */}
+            {/* 3. SEKME: SADECE HESAP KAPATMA */}
             {activeTab === 2 && (
-              <div
-                className="ag-theme-alpine"
-                style={{ height: 400, width: "100%" }}
-              >
-                <AgGridReact
-                  rowData={accounts}
-                  columnDefs={accountsStatusColumns}
-                  loading={loadingAccounts}
-                  pagination={true}
-                  paginationPageSize={10}
-                  animateRows={true}
-                  getRowStyle={(params) => {
-                    if (params.data?.status === "CLOSED") {
-                      return { opacity: 0.6 };
-                    }
-                  }}
-                  overlayNoRowsTemplate="<span>Kayıtlı vadesiz hesap bulunamadı.</span>"
-                />
-              </div>
+              <CustomerAccountsGrid
+                customerId={selectedCustomer.id}
+                title="Hesap Kapatma İşlemleri"
+                includeClosed={true}
+                allowRename={false}
+                allowStatusToggle={false}
+                refreshTrigger={refreshTrigger}
+                height={380}
+                renderActions={(acc) => (
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                    {acc.status === "CLOSED" ? (
+                      <Tooltip title="Kapanış Fişini Görüntüle">
+                        <IconButton
+                          size="small"
+                          color="secondary"
+                          onClick={() => handleOpenAccountReceipt(acc.id)}
+                        >
+                          <ReceiptLongIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    ) : (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        color="error"
+                        startIcon={<CancelOutlinedIcon />}
+                        onClick={() => {
+                          setAccountToClose(acc);
+                          setTargetAccount(null);
+                        }}
+                        sx={{
+                          textTransform: "none",
+                          borderRadius: 1.5,
+                          fontSize: 11,
+                        }}
+                      >
+                        Hesabı Kapat
+                      </Button>
+                    )}
+                  </Box>
+                )}
+              />
             )}
           </CardContent>
         </Card>
@@ -843,34 +423,6 @@ export const DemandAccountsPage: React.FC = () => {
           çağırınız veya Müşteri Yönetimi sayfasından bir müşteri seçiniz.
         </Alert>
       )}
-
-      {/* HESAP ADI DÜZENLEME MODALI */}
-      <Dialog
-        open={Boolean(accountToEdit)}
-        onClose={() => setAccountToEdit(null)}
-        maxWidth="xs"
-        fullWidth
-        slotProps={{ paper: { sx: { borderRadius: 3, p: 1 } } }}
-      >
-        <DialogTitle sx={{ fontWeight: 700 }}>Hesap Adını Güncelle</DialogTitle>
-        <DialogContent sx={{ pt: 2 }}>
-          <TextField
-            label="Hesap Adı / Tanımı"
-            fullWidth
-            value={editAccountName}
-            onChange={(e) => setEditAccountName(e.target.value)}
-            size="small"
-          />
-        </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setAccountToEdit(null)} color="inherit">
-            İptal
-          </Button>
-          <Button onClick={handleSaveRename} variant="contained">
-            Kaydet
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* HESAP KAPATMA ONAY DİYALOĞU */}
       <Dialog
@@ -925,6 +477,64 @@ export const DemandAccountsPage: React.FC = () => {
             <strong>geri alınamaz</strong> ve hesap tüm finansal hareketlere
             kapatılarak salt okunur duruma getirilecektir.
           </Typography>
+
+          {/* BAKİYE > 0 İSE HEDEF HESAP SEÇİM KUTUSU */}
+          {accountToClose && Number(accountToClose.balance || 0) > 0 && (
+            <Box sx={{ width: "100%", mt: 2, textAlign: "left" }}>
+              <Alert severity="warning" sx={{ mb: 2, fontSize: 13 }}>
+                Kapatılacak hesapta{" "}
+                <strong>
+                  {Number(accountToClose.balance).toLocaleString("tr-TR", {
+                    minimumFractionDigits: 2,
+                  })}{" "}
+                  {accountToClose.currency?.code || "TRY"}
+                </strong>{" "}
+                bakiye bulunmaktadır. Kapatma işlemi için bu tutarın
+                aktarılacağı hedef hesabı seçmelisiniz.
+              </Alert>
+
+              {(() => {
+                const availableTargets = customerAccounts.filter(
+                  (acc) =>
+                    acc.id !== accountToClose.id &&
+                    acc.status === "ACTIVE" &&
+                    acc.currencyId === accountToClose.currencyId,
+                );
+
+                if (availableTargets.length === 0) {
+                  return (
+                    <Alert severity="error" sx={{ fontSize: 12 }}>
+                      Müşteriye ait aynı para biriminde (
+                      {accountToClose.currency?.code}) başka aktif hesap
+                      bulunamadı. Lütfen önce bakiyeyi gişeden nakit çekiniz
+                      veya yeni bir hesap açınız.
+                    </Alert>
+                  );
+                }
+
+                return (
+                  <FormControl fullWidth size="small" required sx={{ mt: 1 }}>
+                    <InputLabel>Aktarılacak Hedef Hesap</InputLabel>
+                    <Select
+                      value={targetAccountıd ?? ""}
+                      label="Aktarılacak Hedef Hesap"
+                      onChange={(e) => setTargetAccount(Number(e.target.value))}
+                    >
+                      {availableTargets.map((acc) => (
+                        <MenuItem key={acc.id} value={acc.id}>
+                          [{acc.accountNumber}] {acc.name} — Bakiye:{" "}
+                          {Number(acc.balance).toLocaleString("tr-TR", {
+                            minimumFractionDigits: 2,
+                          })}{" "}
+                          {acc.currency?.code}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                );
+              })()}
+            </Box>
+          )}
         </DialogContent>
 
         <DialogActions sx={{ p: 2, justifyContent: "center", gap: 1.5 }}>
@@ -938,17 +548,52 @@ export const DemandAccountsPage: React.FC = () => {
           </Button>
           <Button
             onClick={async () => {
-              if (accountToClose) {
+              if (!accountToClose || !selectedCustomer) return;
+              const currentBalance = Number(accountToClose.balance || 0);
+
+              try {
+                setIsSubmitting(true);
+
+                // 1. Bakiye varsa önce virman yap
+                if (currentBalance > 0 && targetAccountıd) {
+                  await api.post("/accounting", {
+                    branchId: Number(selectedCustomer.branchId || 1),
+                    accountId: accountToClose.id,
+                    targetAccountId: targetAccountıd,
+                    type: "TRANSFER",
+                    amount: currentBalance,
+                    description: `Hesap Kapatma Bakiye Aktarımı: [${accountToClose.accountNumber}] -> [${targetAccountıd}]`,
+                  });
+                }
+
+                // 2. Hesabı kapat
                 const accId = accountToClose.id;
                 setAccountToClose(null);
+                setTargetAccount(null);
                 await handleUpdateStatus(accId, "CLOSED");
+              } catch (err: any) {
+                alert(
+                  err.response?.data?.message || "Hesap kapatma başarısız.",
+                );
+              } finally {
+                setIsSubmitting(false);
               }
             }}
             variant="contained"
             color="error"
+            disabled={
+              isSubmitting ||
+              (accountToClose !== null &&
+                Number(accountToClose.balance || 0) > 0 &&
+                !targetAccountıd)
+            }
             sx={{ borderRadius: 2, textTransform: "none", px: 3 }}
           >
-            Evet, Hesabı Kapat
+            {isSubmitting ? (
+              <CircularProgress size={20} color="inherit" />
+            ) : (
+              "Evet, Aktar ve Hesabı Kapat"
+            )}
           </Button>
         </DialogActions>
       </Dialog>

@@ -13,11 +13,11 @@ import {
   Tooltip,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
-import PersonIcon from "@mui/icons-material/Person";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import CheckCircleOutlineRoundedIcon from "@mui/icons-material/CheckCircleOutlineRounded";
 import api from "../../services/api";
 import type { Customer } from "../../types/customer.types";
+import { CustomerInfoCard } from "./CustomerInfoCard";
 
 interface CustomerSearchCardProps {
   /**
@@ -188,88 +188,11 @@ export const CustomerSearchCard: React.FC<CustomerSearchCardProps> = ({
           </form>
         ) : (
           /* 2. DURUM: Müşteri bulunduysa ÖZET PROFİL KARTI gösterilir */
-          <Box
-            sx={{
-              p: 2,
-              borderRadius: 2.5,
-              bgcolor: "#f8fafc",
-              border: "1px solid #e2e8f0",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              flexWrap: "wrap",
-              gap: 2,
-            }}
-          >
-            {/* Sol Taraf: Avatar ve İsim Bilgileri */}
-            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
-              <Box
-                sx={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 2.5,
-                  bgcolor: "#e0f2fe",
-                  color: "#0284c7",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <PersonIcon sx={{ fontSize: 28 }} />
-              </Box>
 
-              <Box>
-                <Typography
-                  variant="subtitle1"
-                  sx={{ fontWeight: 800, color: "#0f172a" }}
-                >
-                  {selectedCustomer.firstName} {selectedCustomer.lastName}
-                </Typography>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ fontSize: 13 }}
-                >
-                  Müşteri No:{" "}
-                  <strong style={{ color: "#0f172a" }}>
-                    {selectedCustomer.customerNumber}
-                  </strong>{" "}
-                  &nbsp;|&nbsp; T.C. Kimlik:{" "}
-                  <strong style={{ color: "#0f172a" }}>
-                    {selectedCustomer.identityNumber}
-                  </strong>
-                </Typography>
-              </Box>
-            </Box>
-
-            {/* Sağ Taraf: Şube Rozeti ve Değiştir Butonu */}
-            <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-              <Chip
-                label={`Şube: ${selectedCustomer.branch?.code || ""} - ${selectedCustomer.branch?.name || "Merkez"}`}
-                variant="outlined"
-                sx={{ fontWeight: 600, bgcolor: "#fff" }}
-              />
-
-              <Tooltip title="Farklı Bir Müşteri Çağır">
-                <Button
-                  size="small"
-                  variant="outlined"
-                  color="inherit"
-                  startIcon={<RestartAltIcon />}
-                  onClick={handleClearSelection}
-                  sx={{
-                    borderRadius: 2,
-                    textTransform: "none",
-                    fontWeight: 600,
-                    borderColor: "#cbd5e1",
-                    bgcolor: "#fff",
-                  }}
-                >
-                  Müşteriyi Değiştir
-                </Button>
-              </Tooltip>
-            </Box>
-          </Box>
+          <CustomerInfoCard
+            customer={selectedCustomer}
+            onClear={handleClearSelection}
+          />
         )}
       </CardContent>
     </Card>

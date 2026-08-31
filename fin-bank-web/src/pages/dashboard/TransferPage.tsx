@@ -17,14 +17,14 @@ import {
   Checkbox,
 } from "@mui/material";
 import SwapHorizRoundedIcon from "@mui/icons-material/SwapHorizRounded";
-import AccountBalanceWalletRoundedIcon from "@mui/icons-material/AccountBalanceWalletRounded";
-import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import { ReceiptPrintModal } from "../../components/ReceiptPrintModal";
 import type { IReceiptData } from "../../components/ReceiptPrintModal";
 import type { Customer } from "../../types/customer.types";
 import type { Account } from "../../types/account.types";
 import { useAuth } from "../../hooks/useAuth";
 import api from "../../services/api";
+import { CustomerInfoCard } from "../../components/common/CustomerInfoCard";
+import { CustomerAccountsGrid } from "../../components/common/CustomerAccountsGrid";
 
 interface TransferPageProps {
   customer: Customer;
@@ -33,9 +33,10 @@ interface TransferPageProps {
 export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
   const { user } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [sourceAccountId, setSourceAccountId] = useState<number | "">("");
-  const [targetAccountId, setTargetAccountId] = useState<number | "">("");
-  const [loadingAccounts, setLoadingAccounts] = useState<boolean>(false);
+  const [sourceAccountId, setSourceAccountId] = useState<number | null>(null);
+  const [targetAccountId, setTargetAccountId] = useState<number | null>(null);
+
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   // Form Alanları
   const [amount, setAmount] = useState<string>("");
@@ -53,7 +54,6 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
 
   const fetchAccounts = async () => {
     try {
-      setLoadingAccounts(true);
       const res = await api.get<{ success: boolean; data: Account[] }>(
         `/accounts/customer/${customer.id}`,
       );
@@ -64,15 +64,15 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
     } catch (err) {
       console.error("Hesaplar alınamadı:", err);
     } finally {
-      setLoadingAccounts(false);
     }
   };
 
   useEffect(() => {
     if (customer.id) {
-      setSourceAccountId("");
-      setTargetAccountId("");
+      setSourceAccountId(null);
+      setTargetAccountId(null);
       fetchAccounts();
+      setRefreshTrigger((prev) => prev + 1);
     }
   }, [customer.id]);
 
@@ -84,6 +84,7 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
+    setRefreshTrigger((prev) => prev + 1);
 
     if (!sourceAccount || !targetAccount) {
       setErrorMessage("Lütfen hem kaynak hesabı hem de hedef hesabı seçiniz.");
@@ -199,6 +200,8 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
       </Box>
 
       <CardContent sx={{ p: 3 }}>
+        <CustomerInfoCard customer={customer} />
+
         {errorMessage && (
           <Alert
             severity="error"
@@ -231,180 +234,67 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
           </Alert>
         )}
 
+        {/* 1. ADIM: KAYNAK HESAP TABLOSU */}
+        <Box sx={{ mb: 3 }}>
+          <CustomerAccountsGrid
+            customerId={customer.id}
+            title="Kaynak Hesap (Gönderen Hesabı Seçiniz)"
+            selectedAccountId={sourceAccountId}
+            onSelectAccount={(acc) => {
+              setSourceAccountId(acc.id);
+              if (targetAccountId === acc.id) setTargetAccountId(null);
+              setErrorMessage(null);
+            }}
+            refreshTrigger={refreshTrigger}
+          />
+        </Box>
+
         <form onSubmit={handleTransfer}>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            {/* 1. HESAP SEÇİMLERİ (KAYNAK VE HEDEF) */}
-            <Box
-              sx={{
-                display: "flex",
-                gap: 2,
-                alignItems: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              {/* Kaynak Hesap Dropdown */}
-              <FormControl
-                fullWidth
-                size="small"
-                required
-                sx={{ flex: 1, minWidth: 260 }}
-              >
-                <InputLabel id="select-source-label">
-                  Kaynak Hesap (Gönderen)
-                </InputLabel>
-                <Select
-                  labelId="select-source-label"
-                  label="Kaynak Hesap (Gönderen)"
-                  value={sourceAccountId}
-                  onChange={(e) => {
-                    const val = Number(e.target.value);
-                    setSourceAccountId(val);
-                    if (targetAccountId === val) setTargetAccountId("");
-                    setErrorMessage(null);
-                  }}
-                  disabled={loadingAccounts || accounts.length === 0}
-                >
-                  {accounts.map((acc) => (
-                    <MenuItem
-                      key={acc.id}
-                      value={acc.id}
-                      disabled={acc.status === "BLOCKED"}
-                    >
-                      <Box
-                        sx={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          width: "100%",
-                          gap: 1,
-                        }}
-                      >
-                        <span>
-                          [{acc.accountNumber}] {acc.name}{" "}
-                          {acc.status === "BLOCKED" && "(BLOKE)"}
-                        </span>
-                        <strong
-                          style={{
-                            color:
-                              acc.status === "BLOCKED" ? "#94a3b8" : "#16a34a",
-                          }}
-                        >
-                          {Number(acc.balance).toLocaleString("tr-TR", {
-                            minimumFractionDigits: 2,
-                          })}{" "}
-                          {acc.currency?.code || "TRY"}
-                        </strong>
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <ArrowForwardRoundedIcon
-                color="action"
-                sx={{ display: { xs: "none", md: "block" } }}
-              />
-
-              {/* Hedef Hesap Dropdown */}
-              <FormControl
-                fullWidth
-                size="small"
-                required
-                sx={{ flex: 1, minWidth: 260 }}
-              >
-                <InputLabel id="select-target-label">
-                  Hedef Hesap (Alıcı)
-                </InputLabel>
-                <Select
-                  labelId="select-target-label"
-                  label="Hedef Hesap (Alıcı)"
-                  value={targetAccountId}
-                  onChange={(e) => {
-                    setTargetAccountId(Number(e.target.value));
-                    setErrorMessage(null);
-                  }}
-                  disabled={loadingAccounts || !sourceAccountId}
-                >
-                  {accounts
-                    .filter((acc) => acc.id !== sourceAccountId)
-                    .map((acc) => (
-                      <MenuItem key={acc.id} value={acc.id}>
-                        <Box
-                          sx={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            width: "100%",
-                            gap: 1,
-                          }}
-                        >
-                          <span>
-                            [{acc.accountNumber}] {acc.name}
-                          </span>
-                          <strong style={{ color: "#3b82f6" }}>
-                            {Number(acc.balance).toLocaleString("tr-TR", {
-                              minimumFractionDigits: 2,
-                            })}{" "}
-                            {acc.currency?.code || "TRY"}
-                          </strong>
-                        </Box>
-                      </MenuItem>
-                    ))}
-                </Select>
-              </FormControl>
-            </Box>
-
-            {/* 2. KAYNAK HESAP BAKIYE KARTI */}
-            {sourceAccount && targetAccount && (
+            {sourceAccount ? (
               <>
-                <Box
-                  sx={{
-                    p: 2,
-                    borderRadius: 2,
-                    bgcolor: "#eff6ff",
-                    border: "1px solid #bfdbfe",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    flexWrap: "wrap",
-                    gap: 1.5,
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                    <AccountBalanceWalletRoundedIcon
-                      sx={{ color: "#1d4ed8", fontSize: 32 }}
-                    />
-                    <div>
-                      <Typography
-                        variant="caption"
-                        sx={{ color: "#1e40af", fontWeight: 600 }}
-                      >
-                        Gönderen Hesap Kullanılabilir Bakiye
-                      </Typography>
-                      <Typography
-                        variant="h6"
-                        sx={{ fontWeight: 800, color: "#1e3a8a" }}
-                      >
-                        {Number(sourceAccount.balance).toLocaleString("tr-TR", {
-                          minimumFractionDigits: 2,
-                        })}{" "}
-                        {sourceAccount.currency?.code || "TRY"}
-                      </Typography>
-                    </div>
-                  </Box>
-
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      color: "#3b82f6",
-                      fontFamily: "monospace",
-                      fontSize: 13,
+                {/* 2. ADIM: HEDEF HESAP SEÇİMİ (KAYNAK HESAP HARİÇ LİSTE) */}
+                <FormControl fullWidth size="small" required>
+                  <InputLabel id="select-target-label">
+                    Hedef Hesap (Alıcı)
+                  </InputLabel>
+                  <Select
+                    labelId="select-target-label"
+                    label="Hedef Hesap (Alıcı)"
+                    value={targetAccountId ?? ""}
+                    onChange={(e) => {
+                      setTargetAccountId(Number(e.target.value));
+                      setErrorMessage(null);
                     }}
                   >
-                    Hedef Hesap: <strong>{targetAccount.name}</strong> (
-                    {targetAccount.accountNumber})
-                  </Typography>
-                </Box>
+                    {accounts
+                      .filter((acc) => acc.id !== sourceAccountId)
+                      .map((acc) => (
+                        <MenuItem key={acc.id} value={acc.id}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              width: "100%",
+                              gap: 1,
+                            }}
+                          >
+                            <span>
+                              [{acc.accountNumber}] {acc.name}
+                            </span>
+                            <strong style={{ color: "#3b82f6" }}>
+                              {Number(acc.balance).toLocaleString("tr-TR", {
+                                minimumFractionDigits: 2,
+                              })}{" "}
+                              {acc.currency?.code || "TRY"}
+                            </strong>
+                          </Box>
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
 
-                {/* 3. TUTAR VE AÇIKLAMA */}
+                {/* 3. ADIM: TUTAR VE AÇIKLAMA */}
                 <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
                   <TextField
                     label="Transfer Tutarı"
@@ -439,7 +329,7 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
                   />
                 </Box>
 
-                {/* 4. ONAY BUTONU VE CHECKBOX */}
+                {/* 4. ADIM: ONAY BUTONU VE CHECKBOX */}
                 <Box
                   sx={{
                     display: "flex",
@@ -453,7 +343,7 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
                   <Button
                     type="submit"
                     variant="contained"
-                    disabled={loading || !sourceAccount || !targetAccount}
+                    disabled={loading || !sourceAccount || !targetAccountId}
                     startIcon={<SwapHorizRoundedIcon />}
                     sx={{
                       borderRadius: 2,
@@ -495,13 +385,10 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
                   />
                 </Box>
               </>
-            )}
-
-            {(!sourceAccount || !targetAccount) && (
+            ) : (
               <Alert severity="info" sx={{ borderRadius: 2 }}>
-                Lütfen virman işlemini gerçekleştirmek için hem{" "}
-                <strong>Kaynak</strong> (gönderen) hem de <strong>Hedef</strong>{" "}
-                (alıcı) hesabı seçiniz.
+                Lütfen virman işlemine başlamak için yukarıdaki tablodan{" "}
+                <strong>Kaynak Hesabı (Gönderen)</strong> seçiniz.
               </Alert>
             )}
           </Box>

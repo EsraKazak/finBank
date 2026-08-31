@@ -10,10 +10,6 @@ import {
   CircularProgress,
   Alert,
   Divider,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   FormControlLabel,
   Checkbox,
 } from "@mui/material";
@@ -25,6 +21,8 @@ import type { Customer } from "../../types/customer.types";
 import type { Account } from "../../types/account.types";
 import { useAuth } from "../../hooks/useAuth";
 import api from "../../services/api";
+import { CustomerInfoCard } from "../../components/common/CustomerInfoCard";
+import { CustomerAccountsGrid } from "../../components/common/CustomerAccountsGrid";
 
 interface DepositPageProps {
   customer: Customer;
@@ -34,7 +32,9 @@ export const DepositPage: React.FC<DepositPageProps> = ({ customer }) => {
   const { user } = useAuth();
   const [accounts, setAccounts] = useState<Account[]>([]);
   // Başlangıçta boş
-  const [selectedAccountId, setSelectedAccountId] = useState<number | "">("");
+  const [selectedAccountId, setSelectedAccountId] = useState<number | null>(
+    null,
+  );
   const [loadingAccounts, setLoadingAccounts] = useState<boolean>(false);
 
   // Form Alanları
@@ -57,6 +57,8 @@ export const DepositPage: React.FC<DepositPageProps> = ({ customer }) => {
   const [openReceiptModal, setOpenReceiptModal] = useState<boolean>(false);
   const [receiptData, setReceiptData] = useState<IReceiptData | null>(null);
 
+  const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
+
   const fetchAccounts = async () => {
     try {
       setLoadingAccounts(true);
@@ -76,8 +78,9 @@ export const DepositPage: React.FC<DepositPageProps> = ({ customer }) => {
 
   useEffect(() => {
     if (customer.id) {
-      setSelectedAccountId(""); // Sıfırla
+      setSelectedAccountId(null); // Sıfırla
       fetchAccounts();
+      setRefreshTrigger((prev) => prev + 1);
       setDepositorName(`${customer.firstName} ${customer.lastName}`);
       setDepositorId(customer.identityNumber);
     }
@@ -175,6 +178,7 @@ export const DepositPage: React.FC<DepositPageProps> = ({ customer }) => {
       </Box>
 
       <CardContent sx={{ p: 3 }}>
+        <CustomerInfoCard customer={customer} />
         {errorMessage && (
           <Alert
             severity="error"
@@ -211,45 +215,15 @@ export const DepositPage: React.FC<DepositPageProps> = ({ customer }) => {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {/* 1. HESAP SEÇİMİ */}
             <Box>
-              <FormControl fullWidth size="small" required>
-                <InputLabel id="select-deposit-account-label">
-                  Hedef Vadesiz Hesap
-                </InputLabel>
-                <Select
-                  labelId="select-deposit-account-label"
-                  label="Hedef Vadesiz Hesap"
-                  value={selectedAccountId}
-                  onChange={(e) => {
-                    setSelectedAccountId(Number(e.target.value));
-                    setErrorMessage(null);
-                  }}
-                  disabled={loadingAccounts || accounts.length === 0}
-                >
-                  {accounts.map((acc) => (
-                    <MenuItem key={acc.id} value={acc.id}>
-                      <Box
-                        sx={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          width: "100%",
-                          gap: 2,
-                        }}
-                      >
-                        <span>
-                          <strong>[{acc.accountNumber}]</strong> {acc.name}
-                        </span>
-                        <span style={{ fontWeight: 700, color: "#16a34a" }}>
-                          {Number(acc.balance).toLocaleString("tr-TR", {
-                            minimumFractionDigits: 2,
-                          })}{" "}
-                          {acc.currency?.code || "TRY"}
-                        </span>
-                      </Box>
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
+              <CustomerAccountsGrid
+                customerId={customer.id}
+                selectedAccountId={selectedAccountId}
+                onSelectAccount={(acc) => {
+                  setSelectedAccountId(acc.id);
+                  setErrorMessage(null);
+                }}
+                refreshTrigger={refreshTrigger}
+              />
               {accounts.length === 0 && !loadingAccounts && (
                 <Typography
                   variant="caption"
