@@ -190,7 +190,6 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
           gap: 1.5,
         }}
       >
-        <SwapHorizRoundedIcon color="primary" />
         <Typography
           variant="subtitle1"
           sx={{ fontWeight: 800, color: "#0f172a" }}

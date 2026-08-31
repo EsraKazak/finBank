@@ -168,7 +168,6 @@ export const DepositPage: React.FC<DepositPageProps> = ({ customer }) => {
           gap: 1.5,
         }}
       >
-        <SavingsRoundedIcon sx={{ color: "#16a34a" }} />
         <Typography
           variant="subtitle1"
           sx={{ fontWeight: 800, color: "#0f172a" }}

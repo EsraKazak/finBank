@@ -188,7 +188,6 @@ export const WithdrawalPage: React.FC<WithdrawalPageProps> = ({ customer }) => {
           gap: 1.5,
         }}
       >
-        <PaidRoundedIcon color="primary" />
         <Typography
           variant="subtitle1"
           sx={{ fontWeight: 800, color: "#0f172a" }}
