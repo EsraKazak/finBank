@@ -39,12 +39,23 @@ export const getCustomersHandler = async (req: Request, res: Response) => {
     const branchId = req.query.branchId
       ? Number(req.query.branchId)
       : undefined;
+    const page = req.query.page ? Number(req.query.page) : 1;
+    const limit = req.query.limit ? Number(req.query.limit) : undefined;
+    const search = req.query.search
+      ? String(req.query.search).trim()
+      : undefined;
 
-    const customers = await customerService.getCustomers(branchId);
+    const { customers, pagination } = await customerService.getCustomers({
+      branchId,
+      page,
+      limit,
+      search,
+    });
 
     return res.status(200).json({
       success: true,
       data: customers,
+      pagination,
     });
   } catch (error: any) {
     return res.status(500).json({

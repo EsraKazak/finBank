@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Box,
   Card,
@@ -42,6 +42,20 @@ export const CustomerSearchCard: React.FC<CustomerSearchCardProps> = ({
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!selectedCustomer) {
+      const saved = localStorage.getItem("activeCustomer");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          onSelectCustomer(parsed);
+        } catch {
+          localStorage.removeItem("activeCustomer");
+        }
+      }
+    }
+  }, []);
+
   // Müşteri Arama Fonksiyonu
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,26 +72,27 @@ export const CustomerSearchCard: React.FC<CustomerSearchCardProps> = ({
       setIsSearching(true);
       setErrorMessage(null);
 
-      // Müşteri listesini çekip aranan değere göre eşleştiriyoruz
+      // ARTIK TÜM LİSTEYİ DEĞİL, DOĞRUDAN SUNUCUDA ARAMAYI ÇAĞIRIYORUZ:
       const res = await api.get<{ success: boolean; data: Customer[] }>(
         "/customers",
-      );
-      const foundCustomer = res.data.data.find(
-        (c) =>
-          c.identityNumber === query || c.customerNumber.toString() === query,
+        {
+          params: { search: query, limit: 1 },
+        },
       );
 
+      const foundCustomer = res.data.data?.[0];
+
       if (foundCustomer) {
+        localStorage.setItem("activeCustomer", JSON.stringify(foundCustomer));
         onSelectCustomer(foundCustomer);
-        setSearchQuery(""); // Arama başarılı olunca inputu temizliyoruz
+        setSearchQuery("");
       } else {
         setErrorMessage("Müşteri bulunamadı. Lütfen bilgileri kontrol ediniz.");
       }
     } catch (err: any) {
       console.error("Müşteri arama hatası:", err);
       setErrorMessage(
-        err.response?.data?.message ||
-          "Müşteri aranırken sunucu kaynaklı bir hata oluştu.",
+        err.response?.data?.message || "Müşteri aranırken bir hata oluştu.",
       );
     } finally {
       setIsSearching(false);
@@ -86,6 +101,7 @@ export const CustomerSearchCard: React.FC<CustomerSearchCardProps> = ({
 
   // Müşteriyi Temizleme / Farklı Müşteri Çağırma
   const handleClearSelection = () => {
+    localStorage.removeItem("activeCustomer");
     onSelectCustomer(null);
     setSearchQuery("");
     setErrorMessage(null);

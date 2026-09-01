@@ -71,28 +71,24 @@ export const DashboardPage: React.FC = () => {
 
   // Başlık belirleme
   const getPageTitle = () => {
-    switch (location.pathname) {
-      case "/dashboard":
-        return "Genel Bakış";
-      case "/dashboard/whitelist":
-        return "Beyaz Liste Personel Daveti";
-      case "/dashboard/roles":
-        return "Personel & Rol Yönetimi";
-      case "/dashboard/customers":
-        return "Müşteri ve Hesap Yönetimi";
-      case "/dashboard/cashier":
-        return "Gişe Para Yatırma / Çekme";
-      case "/dashboard/approvals":
-        return "Limit Üstü İşlem Onayları";
-      case "/dashboard/eod":
-        return "Şube Gün Sonu Kapatma";
-      case "/dashboard/audit":
-        return "Denetim ve Log Kayıtları";
-      case "/dashboard/demand-accounts":
-        return "Vadesiz Hesap Yönetimi";
-      default:
-        return "FinBank Portal";
-    }
+    const path = location.pathname;
+
+    if (path === "/dashboard") return "Genel Bakış";
+    if (path.startsWith("/dashboard/whitelist"))
+      return "Beyaz Liste Personel Daveti";
+    if (path.startsWith("/dashboard/roles")) return "Personel & Rol Yönetimi";
+    if (path.startsWith("/dashboard/customers"))
+      return "Müşteri ve Hesap Yönetimi";
+    if (path.startsWith("/dashboard/cashier"))
+      return "Gişe Para Yatırma / Çekme";
+    if (path.startsWith("/dashboard/approvals"))
+      return "Limit Üstü İşlem Onayları";
+    if (path.startsWith("/dashboard/eod")) return "Şube Gün Sonu Kapatma";
+    if (path.startsWith("/dashboard/audit")) return "Denetim ve Log Kayıtları";
+    if (path.startsWith("/dashboard/demand-accounts"))
+      return "Vadesiz Hesap Yönetimi";
+
+    return "FinBank Portal";
   };
 
   const currentWidth = open ? DRAWER_EXPANDED : DRAWER_COLLAPSED;
@@ -219,7 +215,9 @@ export const DashboardPage: React.FC = () => {
               <Tooltip title={!open ? "Davet Listesi" : ""} placement="right">
                 <ListItem disablePadding sx={{ mb: 0.8 }}>
                   <ListItemButton
-                    selected={location.pathname === "/dashboard/whitelist"}
+                    selected={location.pathname.startsWith(
+                      "/dashboard/whitelist",
+                    )}
                     onClick={() => navigate("/dashboard/whitelist")}
                     sx={{
                       borderRadius: 2,
@@ -234,10 +232,11 @@ export const DashboardPage: React.FC = () => {
                   >
                     <ListItemIcon
                       sx={{
-                        color:
-                          location.pathname === "/dashboard/whitelist"
-                            ? "#64ffda"
-                            : "grey.400",
+                        color: location.pathname.startsWith(
+                          "/dashboard/whitelist",
+                        )
+                          ? "#64ffda"
+                          : "grey.400",
                         minWidth: open ? 40 : "auto",
                         mr: open ? 1 : "auto",
                       }}
@@ -265,7 +264,7 @@ export const DashboardPage: React.FC = () => {
               >
                 <ListItem disablePadding sx={{ mb: 0.8 }}>
                   <ListItemButton
-                    selected={location.pathname === "/dashboard/roles"}
+                    selected={location.pathname.startsWith("/dashboard/roles")}
                     onClick={() => navigate("/dashboard/roles")}
                     sx={{
                       borderRadius: 2,
@@ -280,10 +279,9 @@ export const DashboardPage: React.FC = () => {
                   >
                     <ListItemIcon
                       sx={{
-                        color:
-                          location.pathname === "/dashboard/roles"
-                            ? "#64ffda"
-                            : "grey.400",
+                        color: location.pathname.startsWith("/dashboard/roles")
+                          ? "#64ffda"
+                          : "grey.400",
                         minWidth: open ? 40 : "auto",
                         mr: open ? 1 : "auto",
                       }}
@@ -338,7 +336,9 @@ export const DashboardPage: React.FC = () => {
                 >
                   <ListItem disablePadding sx={{ mb: 0.8 }}>
                     <ListItemButton
-                      selected={location.pathname === "/dashboard/customers"}
+                      selected={location.pathname.startsWith(
+                        "/dashboard/customers",
+                      )}
                       onClick={() => navigate("/dashboard/customers")}
                       sx={{
                         borderRadius: 2,
@@ -353,10 +353,11 @@ export const DashboardPage: React.FC = () => {
                     >
                       <ListItemIcon
                         sx={{
-                          color:
-                            location.pathname === "/dashboard/customers"
-                              ? "#64ffda"
-                              : "grey.400",
+                          color: location.pathname.startsWith(
+                            "/dashboard/customers",
+                          )
+                            ? "#64ffda"
+                            : "grey.400",
                           minWidth: open ? 40 : "auto",
                           mr: open ? 1 : "auto",
                         }}
@@ -378,6 +379,7 @@ export const DashboardPage: React.FC = () => {
                   </ListItem>
                 </Tooltip>
               )}
+
               {hasPerm("musteri:goruntule") && (
                 <Tooltip
                   title={!open ? "Vadesiz Hesap Yönetimi" : ""}
@@ -385,9 +387,9 @@ export const DashboardPage: React.FC = () => {
                 >
                   <ListItem disablePadding sx={{ mb: 0.8 }}>
                     <ListItemButton
-                      selected={
-                        location.pathname === "/dashboard/demand-accounts"
-                      }
+                      selected={location.pathname.startsWith(
+                        "/dashboard/demand-accounts",
+                      )}
                       onClick={() => navigate("/dashboard/demand-accounts")}
                       sx={{
                         borderRadius: 2,
@@ -402,10 +404,11 @@ export const DashboardPage: React.FC = () => {
                     >
                       <ListItemIcon
                         sx={{
-                          color:
-                            location.pathname === "/dashboard/demand-accounts"
-                              ? "#64ffda"
-                              : "grey.400",
+                          color: location.pathname.startsWith(
+                            "/dashboard/demand-accounts",
+                          )
+                            ? "#64ffda"
+                            : "grey.400",
                           minWidth: open ? 40 : "auto",
                           mr: open ? 1 : "auto",
                         }}
@@ -435,7 +438,9 @@ export const DashboardPage: React.FC = () => {
                 >
                   <ListItem disablePadding sx={{ mb: 0.8 }}>
                     <ListItemButton
-                      selected={location.pathname === "/dashboard/cashier"}
+                      selected={location.pathname.startsWith(
+                        "/dashboard/cashier",
+                      )}
                       onClick={() => navigate("/dashboard/cashier")}
                       sx={{
                         borderRadius: 2,
@@ -450,10 +455,11 @@ export const DashboardPage: React.FC = () => {
                     >
                       <ListItemIcon
                         sx={{
-                          color:
-                            location.pathname === "/dashboard/cashier"
-                              ? "#64ffda"
-                              : "grey.400",
+                          color: location.pathname.startsWith(
+                            "/dashboard/cashier",
+                          )
+                            ? "#64ffda"
+                            : "grey.400",
                           minWidth: open ? 40 : "auto",
                           mr: open ? 1 : "auto",
                         }}
@@ -483,7 +489,9 @@ export const DashboardPage: React.FC = () => {
                 >
                   <ListItem disablePadding sx={{ mb: 0.8 }}>
                     <ListItemButton
-                      selected={location.pathname === "/dashboard/approvals"}
+                      selected={location.pathname.startsWith(
+                        "/dashboard/approvals",
+                      )}
                       onClick={() => navigate("/dashboard/approvals")}
                       sx={{
                         borderRadius: 2,
@@ -498,10 +506,11 @@ export const DashboardPage: React.FC = () => {
                     >
                       <ListItemIcon
                         sx={{
-                          color:
-                            location.pathname === "/dashboard/approvals"
-                              ? "#64ffda"
-                              : "grey.400",
+                          color: location.pathname.startsWith(
+                            "/dashboard/approvals",
+                          )
+                            ? "#64ffda"
+                            : "grey.400",
                           minWidth: open ? 40 : "auto",
                           mr: open ? 1 : "auto",
                         }}
@@ -531,7 +540,7 @@ export const DashboardPage: React.FC = () => {
                 >
                   <ListItem disablePadding sx={{ mb: 0.8 }}>
                     <ListItemButton
-                      selected={location.pathname === "/dashboard/eod"}
+                      selected={location.pathname.startsWith("/dashboard/eod")}
                       onClick={() => navigate("/dashboard/eod")}
                       sx={{
                         borderRadius: 2,
@@ -546,10 +555,9 @@ export const DashboardPage: React.FC = () => {
                     >
                       <ListItemIcon
                         sx={{
-                          color:
-                            location.pathname === "/dashboard/eod"
-                              ? "#64ffda"
-                              : "grey.400",
+                          color: location.pathname.startsWith("/dashboard/eod")
+                            ? "#64ffda"
+                            : "grey.400",
                           minWidth: open ? 40 : "auto",
                           mr: open ? 1 : "auto",
                         }}
@@ -579,7 +587,9 @@ export const DashboardPage: React.FC = () => {
                 >
                   <ListItem disablePadding sx={{ mb: 0.8 }}>
                     <ListItemButton
-                      selected={location.pathname === "/dashboard/audit"}
+                      selected={location.pathname.startsWith(
+                        "/dashboard/audit",
+                      )}
                       onClick={() => navigate("/dashboard/audit")}
                       sx={{
                         borderRadius: 2,
@@ -594,10 +604,11 @@ export const DashboardPage: React.FC = () => {
                     >
                       <ListItemIcon
                         sx={{
-                          color:
-                            location.pathname === "/dashboard/audit"
-                              ? "#64ffda"
-                              : "grey.400",
+                          color: location.pathname.startsWith(
+                            "/dashboard/audit",
+                          )
+                            ? "#64ffda"
+                            : "grey.400",
                           minWidth: open ? 40 : "auto",
                           mr: open ? 1 : "auto",
                         }}

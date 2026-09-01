@@ -11,20 +11,21 @@ import {
   Tab,
   Alert,
   CircularProgress,
-  IconButton,
   Tooltip,
-  Dialog,
-  DialogContent,
-  DialogActions,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
+  Chip,
+  Paper,
+  Divider,
 } from "@mui/material";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
-import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import ReceiptLongIcon from "@mui/icons-material/ReceiptLong";
+import EditIcon from "@mui/icons-material/Edit";
+import BlockIcon from "@mui/icons-material/Block";
+import LockOpenIcon from "@mui/icons-material/LockOpen";
 import api from "../../services/api";
 import type { Customer } from "../../types/customer.types";
 import type {
@@ -32,12 +33,12 @@ import type {
   Currency,
   ProductCurrency,
   Account,
-  AccountStatus,
 } from "../../types/account.types";
 import { ReceiptPrintModal } from "../../components/ReceiptPrintModal";
 import type { IReceiptData } from "../../components/ReceiptPrintModal";
 import { CustomerSearchCard } from "../../components/common/CustomerSearchCard";
-import { CustomerAccountsGrid } from "../../components/common/CustomerAccountsGrid";
+import { CustomerAccountSelect } from "../../components/common/CustomerAccountSelect";
+import { CloseAccountModal } from "../../components/common/CloseAccountModal";
 
 export const DemandAccountsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -46,18 +47,31 @@ export const DemandAccountsPage: React.FC = () => {
   );
   const [activeTab, setActiveTab] = useState(0);
 
-  // Form State'leri
+  // Sekme 1: Açılış State'leri
   const [openAccountName, setOpenAccountName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Sekme 2: Güncelleme State'leri
+  const [selectedUpdateAccountId, setSelectedUpdateAccountId] = useState<
+    number | null
+  >(null);
+  const [editAccountName, setEditAccountName] = useState<string>("");
+  const [isSavingName, setIsSavingName] = useState<boolean>(false);
+  const [isTogglingStatus, setIsTogglingStatus] = useState<boolean>(false);
+
+  // Sekme 3: Kapatma State'leri
+  const [selectedCloseAccountId, setSelectedCloseAccountId] = useState<
+    number | null
+  >(null);
+  const [isCloseModalOpen, setIsCloseModalOpen] = useState<boolean>(false);
+  const [accountToClose, setAccountToClose] = useState<Account | null>(null);
 
   // Parametrik Tanımlar
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [selectedCurrencyId, setSelectedCurrencyId] = useState<number | "">("");
   const [demandProductId, setDemandProductId] = useState<number | null>(null);
 
-  // Kapatma Modal State
-  const [accountToClose, setAccountToClose] = useState<Account | null>(null);
-  const [targetAccountıd, setTargetAccount] = useState<number | null>(null);
+  // Müşteri Hesapları ve Yenileme Tetikleyicisi
   const [customerAccounts, setCustomerAccounts] = useState<Account[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
@@ -91,32 +105,31 @@ export const DemandAccountsPage: React.FC = () => {
           console.error("URL'den gelen müşteri yüklenemedi:", err);
         }
       };
-
       fetchCustomerFromUrl();
     }
   }, [searchParams]);
 
-  // 2. Müşteri seçildiğinde veya tablo yenilendiğinde hesapları çek
-  useEffect(() => {
-    const fetchCustomerAccounts = async () => {
-      if (!selectedCustomer) return;
-      try {
-        const res = await api.get<{ success: boolean; data: Account[] }>(
-          `/accounts/customer/${selectedCustomer.id}`,
-        );
-        const demandAccounts = (res.data.data || []).filter(
-          (a) => a.product?.type === "DEMAND",
-        );
-        setCustomerAccounts(demandAccounts);
-      } catch (err) {
-        console.error("Hesaplar yüklenemedi:", err);
-      }
-    };
+  // 2. Müşteri seçildiğinde veya yenilemede hesapları çek
+  const fetchCustomerAccounts = async () => {
+    if (!selectedCustomer) return;
+    try {
+      const res = await api.get<{ success: boolean; data: Account[] }>(
+        `/accounts/customer/${selectedCustomer.id}`,
+      );
+      const demandAccounts = (res.data.data || []).filter(
+        (a) => a.product?.type === "DEMAND",
+      );
+      setCustomerAccounts(demandAccounts);
+    } catch (err) {
+      console.error("Hesaplar yüklenemedi:", err);
+    }
+  };
 
+  useEffect(() => {
     fetchCustomerAccounts();
   }, [selectedCustomer, refreshTrigger]);
 
-  // 3. Parametreleri (Ürünler ve Para Birimleri) Çek
+  // 3. Parametreleri Çek
   useEffect(() => {
     const fetchParams = async () => {
       try {
@@ -146,7 +159,21 @@ export const DemandAccountsPage: React.FC = () => {
     fetchParams();
   }, []);
 
-  // Hesabın son kesilen fişini yükleyip modalı açan fonksiyon
+  const selectedUpdateAccount = customerAccounts.find(
+    (a) => a.id === selectedUpdateAccountId,
+  );
+  const selectedCloseAccount = customerAccounts.find(
+    (a) => a.id === selectedCloseAccountId,
+  );
+
+  useEffect(() => {
+    if (selectedUpdateAccount) {
+      setEditAccountName(selectedUpdateAccount.name);
+    } else {
+      setEditAccountName("");
+    }
+  }, [selectedUpdateAccountId, selectedUpdateAccount?.name]);
+
   const handleOpenAccountReceipt = async (accountId: number) => {
     try {
       const res = await api.get(`/accounting?accountId=${accountId}`);
@@ -162,7 +189,6 @@ export const DemandAccountsPage: React.FC = () => {
     }
   };
 
-  // Yeni Vadesiz Hesap Açılışı
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     if (
@@ -204,22 +230,49 @@ export const DemandAccountsPage: React.FC = () => {
     }
   };
 
-  // Durum Değiştirme (Kapatma vb.)
-  const handleUpdateStatus = async (
-    accountId: number,
-    status: AccountStatus,
-  ) => {
+  const handleSaveRename = async () => {
+    if (!selectedUpdateAccount || !editAccountName.trim()) return;
     try {
-      await api.patch(`/accounts/${accountId}/status`, { status });
+      setIsSavingName(true);
+      await api.patch(`/accounts/${selectedUpdateAccount.id}/name`, {
+        name: editAccountName.trim(),
+      });
       setNotification({
         type: "success",
-        message: "Hesap durumu başarıyla güncellendi.",
+        message: "Hesap adı başarıyla güncellendi.",
       });
-
-      handleOpenAccountReceipt(accountId);
       setRefreshTrigger((prev) => prev + 1);
     } catch (err: any) {
-      alert(err.response?.data?.message || "İşlem başarısız.");
+      setNotification({
+        type: "error",
+        message: err.response?.data?.message || "Hesap adı güncellenemedi.",
+      });
+    } finally {
+      setIsSavingName(false);
+    }
+  };
+
+  const handleToggleBlock = async () => {
+    if (!selectedUpdateAccount) return;
+    const nextStatus =
+      selectedUpdateAccount.status === "ACTIVE" ? "BLOCKED" : "ACTIVE";
+    try {
+      setIsTogglingStatus(true);
+      await api.patch(`/accounts/${selectedUpdateAccount.id}/status`, {
+        status: nextStatus,
+      });
+      setNotification({
+        type: "success",
+        message: `Hesap durumu başarıyla "${nextStatus === "ACTIVE" ? "Aktif" : "Bloke"}" olarak güncellendi.`,
+      });
+      setRefreshTrigger((prev) => prev + 1);
+    } catch (err: any) {
+      setNotification({
+        type: "error",
+        message: err.response?.data?.message || "Hesap durumu güncellenemedi.",
+      });
+    } finally {
+      setIsTogglingStatus(false);
     }
   };
 
@@ -246,7 +299,11 @@ export const DemandAccountsPage: React.FC = () => {
       {/* MÜŞTERİ ARAMA KARTI */}
       <CustomerSearchCard
         selectedCustomer={selectedCustomer}
-        onSelectCustomer={(c) => setSelectedCustomer(c)}
+        onSelectCustomer={(c) => {
+          setSelectedCustomer(c);
+          setSelectedUpdateAccountId(null);
+          setSelectedCloseAccountId(null);
+        }}
       />
 
       {/* İŞLEM SEKMELERİ */}
@@ -348,72 +405,322 @@ export const DemandAccountsPage: React.FC = () => {
 
             {/* 2. SEKME: GÜNCELLEME */}
             {activeTab === 1 && (
-              <CustomerAccountsGrid
-                customerId={selectedCustomer.id}
-                title="Kayıtlı Vadesiz Hesaplar ve Güncelleme"
-                includeClosed={false}
-                allowRename={true}
-                allowStatusToggle={true}
-                refreshTrigger={refreshTrigger}
-                height={380}
-                renderActions={(acc) => (
-                  <Tooltip title="Son İşlem Fişini / Dekontu Yazdır">
-                    <IconButton
-                      size="small"
-                      color="secondary"
-                      onClick={() => handleOpenAccountReceipt(acc.id)}
-                    >
-                      <ReceiptLongIcon fontSize="small" />
-                    </IconButton>
-                  </Tooltip>
-                )}
-              />
-            )}
+              <Box
+                sx={{
+                  maxWidth: 700,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 3,
+                }}
+              >
+                <Typography variant="subtitle2" color="text.secondary">
+                  İşlem yapmak istediğiniz vadesiz hesabı listeden seçiniz:
+                </Typography>
 
-            {/* 3. SEKME: SADECE HESAP KAPATMA */}
-            {activeTab === 2 && (
-              <CustomerAccountsGrid
-                customerId={selectedCustomer.id}
-                title="Hesap Kapatma İşlemleri"
-                includeClosed={true}
-                allowRename={false}
-                allowStatusToggle={false}
-                refreshTrigger={refreshTrigger}
-                height={380}
-                renderActions={(acc) => (
-                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-                    {acc.status === "CLOSED" ? (
-                      <Tooltip title="Kapanış Fişini Görüntüle">
-                        <IconButton
-                          size="small"
-                          color="secondary"
-                          onClick={() => handleOpenAccountReceipt(acc.id)}
+                <CustomerAccountSelect
+                  customerId={selectedCustomer.id}
+                  selectedAccountId={selectedUpdateAccountId}
+                  onChange={(acc) =>
+                    setSelectedUpdateAccountId(acc ? acc.id : null)
+                  }
+                  label="Güncellenecek Hesabı Seçiniz"
+                  includeClosed={false}
+                  filterOnlyActive={false}
+                  refreshTrigger={refreshTrigger}
+                />
+
+                {selectedUpdateAccount && (
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2.5,
+                      bgcolor: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2.5,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: 1,
+                      }}
+                    >
+                      <Box>
+                        <Typography
+                          variant="subtitle2"
+                          sx={{ fontWeight: 800 }}
                         >
-                          <ReceiptLongIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
-                    ) : (
-                      <Button
+                          {selectedUpdateAccount.name} (
+                          {selectedUpdateAccount.accountNumber})
+                        </Typography>
+                        <Typography
+                          variant="caption"
+                          sx={{ fontFamily: "monospace", color: "#475569" }}
+                        >
+                          IBAN: {selectedUpdateAccount.iban}
+                        </Typography>
+                      </Box>
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                      >
+                        <Chip
+                          label={
+                            selectedUpdateAccount.status === "ACTIVE"
+                              ? "Aktif"
+                              : "Bloke"
+                          }
+                          color={
+                            selectedUpdateAccount.status === "ACTIVE"
+                              ? "success"
+                              : "warning"
+                          }
+                          size="small"
+                          sx={{ fontWeight: 700 }}
+                        />
+                        <Tooltip title="Son İşlem Dekontunu Yazdır">
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            color="secondary"
+                            startIcon={<ReceiptLongIcon />}
+                            onClick={() =>
+                              handleOpenAccountReceipt(selectedUpdateAccount.id)
+                            }
+                            sx={{
+                              textTransform: "none",
+                              fontWeight: 600,
+                              borderRadius: 1.5,
+                            }}
+                          >
+                            Dekont
+                          </Button>
+                        </Tooltip>
+                      </Box>
+                    </Box>
+
+                    <Divider />
+
+                    <Box
+                      sx={{
+                        display: "flex",
+                        gap: 1.5,
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <TextField
                         size="small"
-                        variant="outlined"
-                        color="error"
-                        startIcon={<CancelOutlinedIcon />}
-                        onClick={() => {
-                          setAccountToClose(acc);
-                          setTargetAccount(null);
-                        }}
+                        label="Hesap Adı / Tanımı"
+                        value={editAccountName}
+                        onChange={(e) => setEditAccountName(e.target.value)}
+                        sx={{ flex: 1, minWidth: 220, bgcolor: "#fff" }}
+                      />
+
+                      <Button
+                        variant="contained"
+                        size="small"
+                        startIcon={<EditIcon />}
+                        onClick={handleSaveRename}
+                        disabled={
+                          isSavingName ||
+                          !editAccountName.trim() ||
+                          editAccountName === selectedUpdateAccount.name
+                        }
                         sx={{
                           textTransform: "none",
+                          fontWeight: 700,
+                          px: 2,
+                          height: 40,
                           borderRadius: 1.5,
-                          fontSize: 11,
                         }}
                       >
-                        Hesabı Kapat
+                        {isSavingName ? (
+                          <CircularProgress size={18} color="inherit" />
+                        ) : (
+                          "İsmi Kaydet"
+                        )}
                       </Button>
-                    )}
-                  </Box>
+
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        color={
+                          selectedUpdateAccount.status === "ACTIVE"
+                            ? "warning"
+                            : "success"
+                        }
+                        startIcon={
+                          selectedUpdateAccount.status === "ACTIVE" ? (
+                            <BlockIcon />
+                          ) : (
+                            <LockOpenIcon />
+                          )
+                        }
+                        onClick={handleToggleBlock}
+                        disabled={isTogglingStatus}
+                        sx={{
+                          textTransform: "none",
+                          fontWeight: 700,
+                          px: 2,
+                          height: 40,
+                          borderRadius: 1.5,
+                        }}
+                      >
+                        {isTogglingStatus ? (
+                          <CircularProgress size={18} color="inherit" />
+                        ) : selectedUpdateAccount.status === "ACTIVE" ? (
+                          "Bloke Et"
+                        ) : (
+                          "Bloke Kaldır"
+                        )}
+                      </Button>
+                    </Box>
+                  </Paper>
                 )}
-              />
+              </Box>
+            )}
+
+            {/* 3. SEKME: HESAP DURUM & KAPATMA */}
+            {activeTab === 2 && (
+              <Box
+                sx={{
+                  maxWidth: 700,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 3,
+                }}
+              >
+                <Typography variant="subtitle2" color="text.secondary">
+                  Kapatma veya durum kontrolü yapmak istediğiniz hesabı listeden
+                  seçiniz:
+                </Typography>
+
+                <CustomerAccountSelect
+                  customerId={selectedCustomer.id}
+                  selectedAccountId={selectedCloseAccountId}
+                  onChange={(acc) =>
+                    setSelectedCloseAccountId(acc ? acc.id : null)
+                  }
+                  label="Kapatılacak Hesabı Seçiniz"
+                  includeClosed={true}
+                  filterOnlyActive={false}
+                  refreshTrigger={refreshTrigger}
+                />
+
+                {selectedCloseAccount && (
+                  <Paper
+                    variant="outlined"
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 2.5,
+                      bgcolor: "#f8fafc",
+                      border: "1px solid #e2e8f0",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: 1,
+                      }}
+                    >
+                      <Box>
+                        <Typography
+                          variant="subtitle2"
+                          sx={{ fontWeight: 800 }}
+                        >
+                          [{selectedCloseAccount.accountNumber}]{" "}
+                          {selectedCloseAccount.name}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          sx={{ color: "#16a34a", fontWeight: 700, mt: 0.5 }}
+                        >
+                          Bakiye:{" "}
+                          {Number(selectedCloseAccount.balance).toLocaleString(
+                            "tr-TR",
+                            {
+                              minimumFractionDigits: 2,
+                            },
+                          )}{" "}
+                          {selectedCloseAccount.currency?.code || "TRY"}
+                        </Typography>
+                      </Box>
+
+                      <Box
+                        sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
+                      >
+                        <Chip
+                          label={
+                            selectedCloseAccount.status === "CLOSED"
+                              ? "Kapalı"
+                              : selectedCloseAccount.status === "BLOCKED"
+                                ? "Bloke"
+                                : "Aktif"
+                          }
+                          color={
+                            selectedCloseAccount.status === "CLOSED"
+                              ? "default"
+                              : selectedCloseAccount.status === "BLOCKED"
+                                ? "warning"
+                                : "success"
+                          }
+                          size="small"
+                          sx={{ fontWeight: 700 }}
+                        />
+
+                        {selectedCloseAccount.status === "CLOSED" ? (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="secondary"
+                            startIcon={<ReceiptLongIcon />}
+                            onClick={() =>
+                              handleOpenAccountReceipt(selectedCloseAccount.id)
+                            }
+                            sx={{
+                              textTransform: "none",
+                              fontWeight: 700,
+                              borderRadius: 1.5,
+                            }}
+                          >
+                            Kapanış Fişini Görüntüle
+                          </Button>
+                        ) : (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="error"
+                            startIcon={<CancelOutlinedIcon />}
+                            onClick={() => {
+                              setAccountToClose(selectedCloseAccount);
+                              setIsCloseModalOpen(true);
+                            }}
+                            sx={{
+                              textTransform: "none",
+                              fontWeight: 700,
+                              borderRadius: 1.5,
+                            }}
+                          >
+                            Hesabı Kapat
+                          </Button>
+                        )}
+                      </Box>
+                    </Box>
+                  </Paper>
+                )}
+              </Box>
             )}
           </CardContent>
         </Card>
@@ -424,179 +731,24 @@ export const DemandAccountsPage: React.FC = () => {
         </Alert>
       )}
 
-      {/* HESAP KAPATMA ONAY DİYALOĞU */}
-      <Dialog
-        open={Boolean(accountToClose)}
-        onClose={() => setAccountToClose(null)}
-        maxWidth="xs"
-        fullWidth
-        slotProps={{
-          paper: { sx: { borderRadius: 3, p: 1.5, textAlign: "center" } },
+      {/* YENİDEN KULLANILABİLİR HESAP KAPATMA MODALI */}
+      <CloseAccountModal
+        open={isCloseModalOpen}
+        onClose={() => {
+          setIsCloseModalOpen(false);
+          setAccountToClose(null);
         }}
-      >
-        <DialogContent
-          sx={{
-            pt: 3,
-            pb: 1,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-          }}
-        >
-          <Box
-            sx={{
-              width: 56,
-              height: 56,
-              borderRadius: "50%",
-              bgcolor: "#fef2f2",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              mb: 2,
-            }}
-          >
-            <WarningAmberRoundedIcon sx={{ fontSize: 32, color: "#dc2626" }} />
-          </Box>
-
-          <Typography
-            variant="h6"
-            sx={{ fontWeight: 700, color: "#1e293b", mb: 1 }}
-          >
-            Vadesiz Hesabı Kapatmak İstiyor Musunuz?
-          </Typography>
-
-          <Typography
-            variant="body2"
-            color="text.secondary"
-            sx={{ lineHeight: 1.6 }}
-          >
-            <strong style={{ color: "#0f172a" }}>
-              {accountToClose?.accountNumber}
-            </strong>{" "}
-            nolu hesabı kapatmak üzeresiniz. Bu işlem{" "}
-            <strong>geri alınamaz</strong> ve hesap tüm finansal hareketlere
-            kapatılarak salt okunur duruma getirilecektir.
-          </Typography>
-
-          {/* BAKİYE > 0 İSE HEDEF HESAP SEÇİM KUTUSU */}
-          {accountToClose && Number(accountToClose.balance || 0) > 0 && (
-            <Box sx={{ width: "100%", mt: 2, textAlign: "left" }}>
-              <Alert severity="warning" sx={{ mb: 2, fontSize: 13 }}>
-                Kapatılacak hesapta{" "}
-                <strong>
-                  {Number(accountToClose.balance).toLocaleString("tr-TR", {
-                    minimumFractionDigits: 2,
-                  })}{" "}
-                  {accountToClose.currency?.code || "TRY"}
-                </strong>{" "}
-                bakiye bulunmaktadır. Kapatma işlemi için bu tutarın
-                aktarılacağı hedef hesabı seçmelisiniz.
-              </Alert>
-
-              {(() => {
-                const availableTargets = customerAccounts.filter(
-                  (acc) =>
-                    acc.id !== accountToClose.id &&
-                    acc.status === "ACTIVE" &&
-                    acc.currencyId === accountToClose.currencyId,
-                );
-
-                if (availableTargets.length === 0) {
-                  return (
-                    <Alert severity="error" sx={{ fontSize: 12 }}>
-                      Müşteriye ait aynı para biriminde (
-                      {accountToClose.currency?.code}) başka aktif hesap
-                      bulunamadı. Lütfen önce bakiyeyi gişeden nakit çekiniz
-                      veya yeni bir hesap açınız.
-                    </Alert>
-                  );
-                }
-
-                return (
-                  <FormControl fullWidth size="small" required sx={{ mt: 1 }}>
-                    <InputLabel>Aktarılacak Hedef Hesap</InputLabel>
-                    <Select
-                      value={targetAccountıd ?? ""}
-                      label="Aktarılacak Hedef Hesap"
-                      onChange={(e) => setTargetAccount(Number(e.target.value))}
-                    >
-                      {availableTargets.map((acc) => (
-                        <MenuItem key={acc.id} value={acc.id}>
-                          [{acc.accountNumber}] {acc.name} — Bakiye:{" "}
-                          {Number(acc.balance).toLocaleString("tr-TR", {
-                            minimumFractionDigits: 2,
-                          })}{" "}
-                          {acc.currency?.code}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                );
-              })()}
-            </Box>
-          )}
-        </DialogContent>
-
-        <DialogActions sx={{ p: 2, justifyContent: "center", gap: 1.5 }}>
-          <Button
-            onClick={() => setAccountToClose(null)}
-            variant="outlined"
-            color="inherit"
-            sx={{ borderRadius: 2, textTransform: "none", px: 3 }}
-          >
-            Vazgeç
-          </Button>
-          <Button
-            onClick={async () => {
-              if (!accountToClose || !selectedCustomer) return;
-              const currentBalance = Number(accountToClose.balance || 0);
-
-              try {
-                setIsSubmitting(true);
-
-                // 1. Bakiye varsa önce virman yap
-                if (currentBalance > 0 && targetAccountıd) {
-                  await api.post("/accounting", {
-                    branchId: Number(selectedCustomer.branchId || 1),
-                    accountId: accountToClose.id,
-                    targetAccountId: targetAccountıd,
-                    type: "TRANSFER",
-                    amount: currentBalance,
-                    description: `Hesap Kapatma Bakiye Aktarımı: [${accountToClose.accountNumber}] -> [${targetAccountıd}]`,
-                  });
-                }
-
-                // 2. Hesabı kapat
-                const accId = accountToClose.id;
-                setAccountToClose(null);
-                setTargetAccount(null);
-                await handleUpdateStatus(accId, "CLOSED");
-              } catch (err: any) {
-                alert(
-                  err.response?.data?.message || "Hesap kapatma başarısız.",
-                );
-              } finally {
-                setIsSubmitting(false);
-              }
-            }}
-            variant="contained"
-            color="error"
-            disabled={
-              isSubmitting ||
-              (accountToClose !== null &&
-                Number(accountToClose.balance || 0) > 0 &&
-                !targetAccountıd)
-            }
-            sx={{ borderRadius: 2, textTransform: "none", px: 3 }}
-          >
-            {isSubmitting ? (
-              <CircularProgress size={20} color="inherit" />
-            ) : (
-              "Evet, Aktar ve Hesabı Kapat"
-            )}
-          </Button>
-        </DialogActions>
-      </Dialog>
+        account={accountToClose}
+        customerId={selectedCustomer?.id || 0}
+        onSuccess={() => {
+          setNotification({
+            type: "success",
+            message: "Hesap başarıyla kapatıldı.",
+          });
+          setSelectedCloseAccountId(null);
+          setRefreshTrigger((prev) => prev + 1);
+        }}
+      />
 
       {/* MUHASEBE FİŞİ YAZDIRMA MODALI */}
       <ReceiptPrintModal

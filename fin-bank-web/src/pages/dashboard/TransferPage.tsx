@@ -9,12 +9,9 @@ import {
   InputAdornment,
   CircularProgress,
   Alert,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   FormControlLabel,
   Checkbox,
+  Grid,
 } from "@mui/material";
 import SwapHorizRoundedIcon from "@mui/icons-material/SwapHorizRounded";
 import { ReceiptPrintModal } from "../../components/ReceiptPrintModal";
@@ -23,8 +20,7 @@ import type { Customer } from "../../types/customer.types";
 import type { Account } from "../../types/account.types";
 import { useAuth } from "../../hooks/useAuth";
 import api from "../../services/api";
-import { CustomerInfoCard } from "../../components/common/CustomerInfoCard";
-import { CustomerAccountsGrid } from "../../components/common/CustomerAccountsGrid";
+import { CustomerAccountSelect } from "../../components/common/CustomerAccountSelect";
 
 interface TransferPageProps {
   customer: Customer;
@@ -35,7 +31,6 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [sourceAccountId, setSourceAccountId] = useState<number | null>(null);
   const [targetAccountId, setTargetAccountId] = useState<number | null>(null);
-
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   // Form Alanları
@@ -63,7 +58,6 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
       setAccounts(demandAccounts);
     } catch (err) {
       console.error("Hesaplar alınamadı:", err);
-    } finally {
     }
   };
 
@@ -72,9 +66,8 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
       setSourceAccountId(null);
       setTargetAccountId(null);
       fetchAccounts();
-      setRefreshTrigger((prev) => prev + 1);
     }
-  }, [customer.id]);
+  }, [customer.id, refreshTrigger]);
 
   const sourceAccount = accounts.find((a) => a.id === sourceAccountId);
   const targetAccount = accounts.find((a) => a.id === targetAccountId);
@@ -84,7 +77,6 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
     e.preventDefault();
     setErrorMessage(null);
     setSuccessMessage(null);
-    setRefreshTrigger((prev) => prev + 1);
 
     if (!sourceAccount || !targetAccount) {
       setErrorMessage("Lütfen hem kaynak hesabı hem de hedef hesabı seçiniz.");
@@ -161,7 +153,7 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
         }
       }
 
-      await fetchAccounts();
+      setRefreshTrigger((prev) => prev + 1);
     } catch (err: any) {
       setErrorMessage(
         err.response?.data?.message ||
@@ -199,12 +191,10 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
       </Box>
 
       <CardContent sx={{ p: 3 }}>
-        <CustomerInfoCard customer={customer} />
-
         {errorMessage && (
           <Alert
             severity="error"
-            sx={{ mb: 3, borderRadius: 2 }}
+            sx={{ my: 2, borderRadius: 2 }}
             onClose={() => setErrorMessage(null)}
           >
             {errorMessage}
@@ -214,7 +204,7 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
         {successMessage && (
           <Alert
             severity="success"
-            sx={{ mb: 3, borderRadius: 2 }}
+            sx={{ my: 2, borderRadius: 2 }}
             onClose={() => setSuccessMessage(null)}
             action={
               receiptData ? (
@@ -233,68 +223,70 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
           </Alert>
         )}
 
-        {/* 1. ADIM: KAYNAK HESAP TABLOSU */}
-        <Box sx={{ mb: 3 }}>
-          <CustomerAccountsGrid
-            customerId={customer.id}
-            title="Kaynak Hesap (Gönderen Hesabı Seçiniz)"
-            selectedAccountId={sourceAccountId}
-            onSelectAccount={(acc) => {
-              setSourceAccountId(acc.id);
-              if (targetAccountId === acc.id) setTargetAccountId(null);
-              setErrorMessage(null);
-            }}
-            refreshTrigger={refreshTrigger}
-          />
-        </Box>
+        <form onSubmit={handleTransfer} style={{ marginTop: 16 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 2.5 }}>
+            {/* 1. VE 2. ADIM: HESAP SEÇİMLERİ (YAN YANA COMBOBOX) */}
+            <Grid container spacing={2}>
+              {/* Kaynak Hesap */}
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 700,
+                    color: "#475569",
+                    mb: 0.5,
+                    display: "block",
+                  }}
+                >
+                  Kaynak Hesap (Gönderen)
+                </Typography>
+                <CustomerAccountSelect
+                  customerId={customer.id}
+                  selectedAccountId={sourceAccountId}
+                  excludeAccountId={targetAccountId} // Hedef hesapta seçili olanı kaynakta gösterme
+                  onChange={(acc) => {
+                    setSourceAccountId(acc ? acc.id : null);
+                    if (targetAccountId === acc?.id) setTargetAccountId(null);
+                    setErrorMessage(null);
+                  }}
+                  label="Gönderen Hesabı Seçiniz"
+                  refreshTrigger={refreshTrigger}
+                />
+              </Grid>
 
-        <form onSubmit={handleTransfer}>
-          <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-            {sourceAccount ? (
+              {/* Hedef Hesap */}
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Typography
+                  variant="caption"
+                  sx={{
+                    fontWeight: 700,
+                    color: "#475569",
+                    mb: 0.5,
+                    display: "block",
+                  }}
+                >
+                  Hedef Hesap (Alıcı)
+                </Typography>
+                <CustomerAccountSelect
+                  customerId={customer.id}
+                  selectedAccountId={targetAccountId}
+                  excludeAccountId={sourceAccountId} // Kaynak hesapta seçili olanı hedefte gösterme
+                  onChange={(acc) => {
+                    setTargetAccountId(acc ? acc.id : null);
+                    if (sourceAccountId === acc?.id) setSourceAccountId(null);
+                    setErrorMessage(null);
+                  }}
+                  label="Hedef Hesabı Seçiniz"
+                  disabled={!sourceAccountId}
+                  refreshTrigger={refreshTrigger}
+                />
+              </Grid>
+            </Grid>
+
+            {/* 3. ADIM: TUTAR VE AÇIKLAMA */}
+            {sourceAccount && (
               <>
-                {/* 2. ADIM: HEDEF HESAP SEÇİMİ (KAYNAK HESAP HARİÇ LİSTE) */}
-                <FormControl fullWidth size="small" required>
-                  <InputLabel id="select-target-label">
-                    Hedef Hesap (Alıcı)
-                  </InputLabel>
-                  <Select
-                    labelId="select-target-label"
-                    label="Hedef Hesap (Alıcı)"
-                    value={targetAccountId ?? ""}
-                    onChange={(e) => {
-                      setTargetAccountId(Number(e.target.value));
-                      setErrorMessage(null);
-                    }}
-                  >
-                    {accounts
-                      .filter((acc) => acc.id !== sourceAccountId)
-                      .map((acc) => (
-                        <MenuItem key={acc.id} value={acc.id}>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              width: "100%",
-                              gap: 1,
-                            }}
-                          >
-                            <span>
-                              [{acc.accountNumber}] {acc.name}
-                            </span>
-                            <strong style={{ color: "#3b82f6" }}>
-                              {Number(acc.balance).toLocaleString("tr-TR", {
-                                minimumFractionDigits: 2,
-                              })}{" "}
-                              {acc.currency?.code || "TRY"}
-                            </strong>
-                          </Box>
-                        </MenuItem>
-                      ))}
-                  </Select>
-                </FormControl>
-
-                {/* 3. ADIM: TUTAR VE AÇIKLAMA */}
-                <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
+                <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", mt: 1 }}>
                   <TextField
                     label="Transfer Tutarı"
                     type="number"
@@ -308,7 +300,7 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
                         endAdornment: (
                           <InputAdornment position="end">
                             <strong>
-                              {sourceAccount?.currency?.code || "TRY"}
+                              {sourceAccount.currency?.code || "TRY"}
                             </strong>
                           </InputAdornment>
                         ),
@@ -384,11 +376,6 @@ export const TransferPage: React.FC<TransferPageProps> = ({ customer }) => {
                   />
                 </Box>
               </>
-            ) : (
-              <Alert severity="info" sx={{ borderRadius: 2 }}>
-                Lütfen virman işlemine başlamak için yukarıdaki tablodan{" "}
-                <strong>Kaynak Hesabı (Gönderen)</strong> seçiniz.
-              </Alert>
             )}
           </Box>
         </form>

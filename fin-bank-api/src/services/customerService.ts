@@ -55,6 +55,32 @@ export const registerCustomer = async (
   });
 };
 
-export const getCustomers = async (branchId?: number) => {
-  return await customerRepository.listCustomersByBranch(branchId);
+export const getCustomers = async (options: {
+  branchId?: number;
+  page?: number;
+  limit?: number;
+  search?: string;
+}) => {
+  const { branchId, search } = options;
+  const page = Math.max(1, options.page || 1);
+  const limit = options.limit ? Math.max(1, options.limit) : undefined;
+  const skip = limit ? (page - 1) * limit : undefined;
+
+  const { customers, totalCount } =
+    await customerRepository.listPaginatedCustomers({
+      branchId,
+      search,
+      skip,
+      take: limit,
+    });
+
+  return {
+    customers,
+    pagination: {
+      total: totalCount,
+      page: limit ? page : 1,
+      limit: limit || totalCount,
+      totalPages: limit ? Math.ceil(totalCount / limit) : 1,
+    },
+  };
 };

@@ -18,6 +18,7 @@ export const CashierPage: React.FC = () => {
     null,
   );
 
+  // 1. URL'den doğrudan bir customerId ile gelindiyse API'den yükle
   useEffect(() => {
     const loadCustomer = async (id: number) => {
       try {
@@ -27,6 +28,7 @@ export const CashierPage: React.FC = () => {
         const found = res.data.data.find((c) => c.id === id);
         if (found) {
           setSelectedCustomer(found);
+          localStorage.setItem("activeCustomer", JSON.stringify(found));
         }
       } catch (err) {
         console.error("Müşteri yüklenemedi:", err);
@@ -41,7 +43,7 @@ export const CashierPage: React.FC = () => {
     }
   }, [customerIdParam]);
 
-  // URL'e göre aktif sekme (0: Çekme, 1: Yatırma, 2: Transfer/Virman)
+  // 2. URL'e göre aktif sekme (0: Çekme, 1: Yatırma, 2: Virman)
   let currentTab = 0;
   if (location.pathname.includes("/deposit")) currentTab = 1;
   else if (location.pathname.includes("/transfer")) currentTab = 2;
@@ -65,17 +67,22 @@ export const CashierPage: React.FC = () => {
         </Typography>
       </Box>
 
-      {/* Müşteri Arama Kartı */}
+      {/* Müşteri Arama & Hafıza Kartı */}
       <CustomerSearchCard
         selectedCustomer={selectedCustomer}
         onSelectCustomer={(c) => {
           setSelectedCustomer(c);
-          if (c) navigate(`${location.pathname}?customerId=${c.id}`);
-          else navigate(location.pathname);
+          if (c) {
+            navigate(`${location.pathname}?customerId=${c.id}`, {
+              replace: true,
+            });
+          } else {
+            navigate(location.pathname, { replace: true });
+          }
         }}
       />
 
-      {/* Müşteri Doğrulandıysa Sekmeler Açılır */}
+      {/* Müşteri Doğrulandıysa Sekmeler ve Formlar Açılır */}
       {selectedCustomer ? (
         <Box>
           <Card

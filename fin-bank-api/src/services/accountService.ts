@@ -155,14 +155,16 @@ export const getCustomerAccounts = async (customerId: number) => {
   return await accountRepository.listAccountsByCustomerId(customerId);
 };
 
+// GÜNCELLENEN DURUM DEĞİŞTİRME VE HESAP KAPATMA VİRMANI METODU
 export const changeAccountStatus = async (
   accountId: number,
   newStatus: AccountStatus,
   userId: string,
+  transferToAccountId?: number,
 ) => {
   const account = await prisma.account.findUnique({
     where: { id: accountId },
-    include: { branch: true },
+    include: { branch: true, currency: true },
   });
 
   if (!account) {
@@ -179,12 +181,7 @@ export const changeAccountStatus = async (
     throw new Error(`Hesap zaten ${newStatus} durumundadır.`);
   }
 
-  // Bakiye kontrolü: Kapatılacak hesapta bakiye sıfır olmalıdır
-  if (newStatus === "CLOSED" && Number(account.balance) > 0) {
-    throw new Error(
-      `Hesap bakiyesi (${account.balance}) sıfır olmadan hesap kapatılamaz. Lütfen önce bakiyeyi çekiniz.`,
-    );
-  }
+  const balance = Number(account.balance);
 
   // Fiş açıklamalarını duruma göre dinamik belirle
   const statusDescriptions: Record<AccountStatus, string> = {
@@ -194,7 +191,65 @@ export const changeAccountStatus = async (
   };
 
   return await prisma.$transaction(async (tx) => {
-    // 1. Hesap durumunu güncelle
+    // 1. Kapatma durumunda bakiye kontrolü ve virman tahliyesi
+    if (newStatus === "CLOSED" && balance > 0) {
+      if (!transferToAccountId) {
+        throw new Error(
+          `Hesap bakiyesi (${balance.toFixed(2)} ${account.currency.code}) sıfır olmadan hesap kapatılamaz. Lütfen bir hedef transfer hesabı seçiniz veya bakiyeyi gişeden çekiniz.`,
+        );
+      }
+
+      if (transferToAccountId === accountId) {
+        throw new Error(
+          "Bakiyeyi kapatılmak istenen hesabın kendisine aktaramazsınız.",
+        );
+      }
+
+      const targetAccount = await tx.account.findUnique({
+        where: { id: transferToAccountId },
+        include: { branch: true, currency: true },
+      });
+
+      if (!targetAccount || targetAccount.status !== "ACTIVE") {
+        throw new Error(
+          "Seçilen hedef transfer hesabı bulunamadı veya aktif değil.",
+        );
+      }
+
+      if (targetAccount.currencyId !== account.currencyId) {
+        throw new Error(
+          `Hedef hesap para birimi (${targetAccount.currency.code}) ile kapatılan hesap para birimi (${account.currency.code}) aynı olmalıdır.`,
+        );
+      }
+
+      // Kapatılan hesabın bakiyesini sıfırla
+      await tx.account.update({
+        where: { id: accountId },
+        data: { balance: 0 },
+      });
+
+      // Hedef hesabın bakiyesini artır
+      await tx.account.update({
+        where: { id: transferToAccountId },
+        data: { balance: { increment: balance } },
+      });
+
+      // Bakiye transferi için muhasebe kaydı (Virman Fişi) oluştur
+      const transferReceiptNumber = generateReceiptNumber(account.branch.code);
+      await tx.accountingRecord.create({
+        data: {
+          receiptNumber: transferReceiptNumber,
+          type: "TRANSFER",
+          amount: balance,
+          description: `Hesap Kapatma Bakiye Virmanı: ${account.accountNumber} -> ${targetAccount.accountNumber}`,
+          branchId: account.branchId,
+          accountId: account.id,
+          createdById: userId,
+        },
+      });
+    }
+
+    // 2. Hesap durumunu güncelle (ACTIVE, BLOCKED veya CLOSED)
     const updatedAccount = await tx.account.update({
       where: { id: accountId },
       data: {
@@ -208,7 +263,7 @@ export const changeAccountStatus = async (
       },
     });
 
-    // 2. Her durum değişikliği için Muhasebe Fişi kes
+    // 3. Durum değişikliği için muhasebe fişi kes
     const receiptNumber = generateReceiptNumber(account.branch.code);
     await tx.accountingRecord.create({
       data: {

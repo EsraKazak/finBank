@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Box,
@@ -19,15 +19,14 @@ import {
   FormControl,
   InputLabel,
   Select,
-  IconButton,
-  Tooltip,
 } from "@mui/material";
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import SearchIcon from "@mui/icons-material/Search";
 import BadgeIcon from "@mui/icons-material/Badge";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import PaymentsIcon from "@mui/icons-material/Payments";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef } from "ag-grid-community";
+import type { ColDef, PaginationChangedEvent } from "ag-grid-community";
 import api from "../../services/api";
 import type {
   Customer,
@@ -36,15 +35,19 @@ import type {
 } from "../../types/customer.types";
 import { isValidTurkishId } from "../../utils/identityValidator";
 import { useAuth } from "../../hooks/useAuth";
-import PaymentsIcon from "@mui/icons-material/Payments";
 
 export const CustomersPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
+
+  // Sayfalama State'leri
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   // Müşteri Modal State
   const [isCustomerModalOpen, setIsCustomerModalOpen] =
@@ -61,25 +64,71 @@ export const CustomersPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const fetchData = async () => {
-    try {
-      setIsLoading(true);
-      const [custRes, branchRes] = await Promise.all([
-        api.get<{ success: boolean; data: Customer[] }>("/customers"),
-        api.get<{ success: boolean; data: Branch[] }>("/customers/branches"),
-      ]);
-      setCustomers(custRes.data.data);
-      setBranches(branchRes.data.data);
-    } catch (error: any) {
-      console.error("Veriler çekilemedi:", error);
-    } finally {
-      setIsLoading(false);
+  // Şubeleri 1 kez çek
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const res = await api.get<{ success: boolean; data: Branch[] }>(
+          "/customers/branches",
+        );
+        setBranches(res.data.data);
+      } catch (err) {
+        console.error("Şubeler alınamadı:", err);
+      }
+    };
+    fetchBranches();
+  }, []);
+
+  // Sunucudan Sayfalanmış Veriyi Çekme Fonksiyonu
+  const fetchPaginatedCustomers = useCallback(
+    async (currentPage: number, currentLimit: number, search: string) => {
+      try {
+        setIsLoading(true);
+        const res = await api.get<{
+          success: boolean;
+          data: Customer[];
+          pagination: { total: number };
+        }>("/customers", {
+          params: {
+            page: currentPage,
+            limit: currentLimit,
+            search: search.trim() || undefined,
+          },
+        });
+
+        setCustomers(res.data.data || []);
+      } catch (error: any) {
+        console.error("Müşteri listesi çekilemedi:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [],
+  );
+
+  // Sayfa, Limit veya Arama değiştiğinde sunucudan veri çek (Debounce: 350ms)
+  useEffect(() => {
+    const delayDebounceFn = setTimeout(() => {
+      fetchPaginatedCustomers(page, pageSize, searchTerm);
+    }, 350);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [page, pageSize, searchTerm, fetchPaginatedCustomers]);
+
+  // AG Grid sayfalama butonuna basıldığında
+  const onPaginationChanged = (event: PaginationChangedEvent) => {
+    if (!event.api) return;
+    const newPage = event.api.paginationGetCurrentPage() + 1;
+    const newPageSize = event.api.paginationGetPageSize();
+
+    if (newPage !== page) {
+      setPage(newPage);
+    }
+    if (newPageSize !== pageSize) {
+      setPageSize(newPageSize);
+      setPage(1);
     }
   };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
 
   const handleOpenCustomerModal = () => {
     setErrorMessage(null);
@@ -98,9 +147,7 @@ export const CustomersPage: React.FC = () => {
     setErrorMessage(null);
 
     if (!isValidTurkishId(customerFormData.identityNumber)) {
-      setErrorMessage(
-        "Lütfen geçerli 11 haneli bir T.C. Kimlik Numarası giriniz.",
-      );
+      setErrorMessage("Lütfen geçerli 11 haneli bir T.C. Kimlik No giriniz.");
       return;
     }
 
@@ -109,7 +156,7 @@ export const CustomersPage: React.FC = () => {
       await api.post("/customers", customerFormData);
       setSuccessMessage("Müşteri kaydı başarıyla oluşturuldu.");
       setIsCustomerModalOpen(false);
-      fetchData();
+      fetchPaginatedCustomers(1, pageSize, searchTerm);
     } catch (error: any) {
       setErrorMessage(
         error.response?.data?.message ||
@@ -120,24 +167,12 @@ export const CustomersPage: React.FC = () => {
     }
   };
 
-  const filteredCustomers = useMemo(() => {
-    return customers.filter(
-      (c) =>
-        c.identityNumber.includes(searchTerm) ||
-        c.customerNumber.toString().includes(searchTerm) ||
-        `${c.firstName} ${c.lastName}`
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase()),
-    );
-  }, [customers, searchTerm]);
-
-  // AG Grid Kolon Tanımları
   const columnDefs = useMemo<ColDef<Customer>[]>(
     () => [
       {
         headerName: "Müşteri No",
         field: "customerNumber",
-        flex: 1,
+        width: 140,
         cellRenderer: (params: any) => (
           <Box
             sx={{
@@ -148,7 +183,7 @@ export const CustomersPage: React.FC = () => {
             }}
           >
             <BadgeIcon fontSize="small" color="primary" />
-            <Typography sx={{ fontWeight: 600, fontSize: "0.875rem" }}>
+            <Typography sx={{ fontWeight: 700, fontSize: "0.875rem" }}>
               {params.value}
             </Typography>
           </Box>
@@ -157,7 +192,18 @@ export const CustomersPage: React.FC = () => {
       {
         headerName: "T.C. Kimlik No",
         field: "identityNumber",
-        flex: 1,
+        width: 150,
+        cellRenderer: (params: any) => (
+          <Typography
+            sx={{
+              fontFamily: "monospace",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+            }}
+          >
+            {params.value}
+          </Typography>
+        ),
       },
       {
         headerName: "Ad Soyad",
@@ -165,11 +211,13 @@ export const CustomersPage: React.FC = () => {
           `${params.data?.firstName || ""} ${params.data?.lastName || ""}`,
         cellStyle: { fontWeight: 600 },
         flex: 1.2,
+        minWidth: 160,
       },
       {
         headerName: "Kayıt Şubesi",
         field: "branch",
-        flex: 1.2,
+        flex: 1.1,
+        minWidth: 150,
         cellRenderer: (params: any) => {
           const branch = params.data?.branch;
           return (
@@ -184,23 +232,23 @@ export const CustomersPage: React.FC = () => {
       {
         headerName: "Durum",
         field: "isActive",
-        flex: 0.8,
+        width: 100,
         cellRenderer: (params: any) => (
           <Chip
             label={params.value ? "Aktif" : "Pasif"}
             color={params.value ? "success" : "default"}
             size="small"
+            sx={{ fontWeight: 600, fontSize: 11 }}
           />
         ),
       },
       {
-        headerName: "İşlemler",
+        headerName: "Hızlı İşlemler",
         field: "id",
-        flex: 1.2,
+        width: 250,
+        pinned: "right",
         sortable: false,
         filter: false,
-        cellClass: "ag-cell-center",
-        headerClass: "ag-header-cell-center",
         cellRenderer: (params: any) => (
           <Box
             sx={{
@@ -211,35 +259,49 @@ export const CustomersPage: React.FC = () => {
               height: "100%",
             }}
           >
-            {/* 1. Vadesiz Hesaplar Butonu */}
-            <Tooltip title="Vadesiz Hesaplarını Yönet">
-              <IconButton
-                color="primary"
-                onClick={() =>
-                  navigate(
-                    `/dashboard/demand-accounts?customerId=${params.value}`,
-                  )
-                }
-                size="small"
-              >
-                <AccountBalanceWalletIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              startIcon={<AccountBalanceWalletIcon sx={{ fontSize: 16 }} />}
+              onClick={() =>
+                navigate(
+                  `/dashboard/demand-accounts?customerId=${params.value}`,
+                )
+              }
+              sx={{
+                textTransform: "none",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                py: 0.3,
+                px: 1.2,
+                borderRadius: 1.5,
+              }}
+            >
+              Hesaplar
+            </Button>
 
-            {/* 2. Gişe / Nakit Para İşlemleri Butonu */}
-            <Tooltip title="Gişe / Para İşlemleri Yap">
-              <IconButton
-                sx={{ color: "#16a34a" }}
-                onClick={() =>
-                  navigate(
-                    `/dashboard/cashier/withdraw?customerId=${params.value}`,
-                  )
-                }
-                size="small"
-              >
-                <PaymentsIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            <Button
+              size="small"
+              variant="outlined"
+              color="success"
+              startIcon={<PaymentsIcon sx={{ fontSize: 16 }} />}
+              onClick={() =>
+                navigate(
+                  `/dashboard/cashier/withdraw?customerId=${params.value}`,
+                )
+              }
+              sx={{
+                textTransform: "none",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                py: 0.3,
+                px: 1.2,
+                borderRadius: 1.5,
+              }}
+            >
+              Gişe / Para
+            </Button>
           </Box>
         ),
       },
@@ -262,8 +324,8 @@ export const CustomersPage: React.FC = () => {
             Müşteri Yönetimi
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Banka müşterilerini görüntüleyebilir ve yeni müşteri kaydı
-            oluşturabilirsiniz.
+            Banka müşterilerini görüntüleyebilir, hesaplarını yönetebilir veya
+            yeni müşteri kaydedebilirsiniz.
           </Typography>
         </div>
         <Button
@@ -304,7 +366,10 @@ export const CustomersPage: React.FC = () => {
             fullWidth
             placeholder="Müşteri No, TC Kimlik No veya İsim ile ara..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setPage(1);
+            }}
             size="small"
             slotProps={{
               input: {
@@ -327,14 +392,15 @@ export const CustomersPage: React.FC = () => {
           overflow: "hidden",
         }}
       >
-        <div className="ag-theme-alpine" style={{ height: 500, width: "100%" }}>
+        <div className="ag-theme-alpine" style={{ height: 520, width: "100%" }}>
           <AgGridReact
-            rowData={filteredCustomers}
+            rowData={customers}
             columnDefs={columnDefs}
             loading={isLoading}
             pagination={true}
-            paginationPageSize={10}
+            paginationPageSize={pageSize}
             paginationPageSizeSelector={[10, 20, 50]}
+            onPaginationChanged={onPaginationChanged}
             animateRows={true}
             overlayNoRowsTemplate="<span>Kayıtlı müşteri bulunamadı.</span>"
           />

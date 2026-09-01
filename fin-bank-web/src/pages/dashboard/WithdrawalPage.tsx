@@ -22,8 +22,7 @@ import type { Customer } from "../../types/customer.types";
 import type { Account } from "../../types/account.types";
 import { useAuth } from "../../hooks/useAuth";
 import api from "../../services/api";
-import { CustomerInfoCard } from "../../components/common/CustomerInfoCard";
-import { CustomerAccountsGrid } from "../../components/common/CustomerAccountsGrid";
+import { CustomerAccountSelect } from "../../components/common/CustomerAccountSelect";
 
 interface WithdrawalPageProps {
   customer: Customer;
@@ -197,7 +196,6 @@ export const WithdrawalPage: React.FC<WithdrawalPageProps> = ({ customer }) => {
       </Box>
 
       <CardContent sx={{ p: 3 }}>
-        <CustomerInfoCard customer={customer} />
         {errorMessage && (
           <Alert
             icon={<WarningAmberRoundedIcon fontSize="inherit" />}
@@ -235,13 +233,15 @@ export const WithdrawalPage: React.FC<WithdrawalPageProps> = ({ customer }) => {
           <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
             {/* 1. HESAP SEÇİMİ */}
             <Box>
-              <CustomerAccountsGrid
+              <CustomerAccountSelect
                 customerId={customer.id}
                 selectedAccountId={selectedAccountId}
-                onSelectAccount={(acc) => {
-                  setSelectedAccountId(acc.id);
+                onChange={(acc) => {
+                  setSelectedAccountId(acc ? acc.id : null);
                   setErrorMessage(null);
                 }}
+                label="Para Çekilecek Hesabı Seçiniz"
+                filterOnlyActive={true}
                 refreshTrigger={refreshTrigger}
               />
 

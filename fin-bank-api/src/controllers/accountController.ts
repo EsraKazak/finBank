@@ -127,7 +127,8 @@ export const updateAccountStatusHandler = async (
 ) => {
   try {
     const accountId = Number(req.params.id);
-    const { status } = req.body;
+    // 1. transferToAccountId parametresini body'den alıyoruz:
+    const { status, transferToAccountId } = req.body;
     const userId = (req as any).user?.id;
 
     if (!accountId || !status) {
@@ -137,10 +138,12 @@ export const updateAccountStatusHandler = async (
       });
     }
 
+    // 2. Servise 4. parametre olarak iletiyoruz:
     const updatedAccount = await accountService.changeAccountStatus(
       accountId,
       status,
       userId,
+      transferToAccountId ? Number(transferToAccountId) : undefined,
     );
 
     return res.status(200).json({
