@@ -17,8 +17,11 @@ import {
   Container,
   IconButton,
   Tooltip,
+  Collapse,
 } from "@mui/material";
 
+import ExpandLess from "@mui/icons-material/ExpandLess";
+import ExpandMore from "@mui/icons-material/ExpandMore";
 // İkonlar
 import MenuIcon from "@mui/icons-material/Menu";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
@@ -33,6 +36,7 @@ import PolicyOutlinedIcon from "@mui/icons-material/PolicyOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
 import NotificationsNoneOutlinedIcon from "@mui/icons-material/NotificationsNoneOutlined";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
 
 import { useAuth } from "../hooks/useAuth";
 
@@ -44,6 +48,10 @@ export const DashboardPage: React.FC = () => {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+  //vadeli menüsü için hangisinin açık olduğunu kontrol etmek için state
+  const [timeMenuOpen, setTimeMenuOpen] = useState(
+    location.pathname.startsWith("/dashboard/time-accounts"),
+  );
 
   const displayName =
     `${user?.name || ""} ${user?.surname || ""}`.trim() ||
@@ -87,6 +95,10 @@ export const DashboardPage: React.FC = () => {
     if (path.startsWith("/dashboard/audit")) return "Denetim ve Log Kayıtları";
     if (path.startsWith("/dashboard/demand-accounts"))
       return "Vadesiz Hesap Yönetimi";
+    if (path.startsWith("/dashboard/time-accounts"))
+      return "Vadeli Hesap İşlemleri";
+    if (path === "/dashboard/time-accounts/update")
+      return "Vadeli Hesap Vade & Temdit Güncelleme";
 
     return "FinBank Portal";
   };
@@ -431,6 +443,179 @@ export const DashboardPage: React.FC = () => {
                 </Tooltip>
               )}
 
+              {/* VADELİ HESAP İŞLEMLERİ (AÇILIR MENÜ) */}
+              {hasPerm("musteri:goruntule") && (
+                <>
+                  <Tooltip
+                    title={!open ? "Vadeli Hesap İşlemleri" : ""}
+                    placement="right"
+                  >
+                    <ListItem disablePadding sx={{ mb: 0.5 }}>
+                      <ListItemButton
+                        onClick={() => {
+                          if (!open) setOpen(true); // Menü kapalıysa (collapsed) önce genişlet
+                          setTimeMenuOpen(!timeMenuOpen);
+                        }}
+                        selected={location.pathname.startsWith(
+                          "/dashboard/time-accounts",
+                        )}
+                        sx={{
+                          borderRadius: 2,
+                          justifyContent: open ? "initial" : "center",
+                          px: 2,
+                          "&.Mui-selected": {
+                            bgcolor: "#172a45",
+                            color: "#64ffda",
+                          },
+                          "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
+                        }}
+                      >
+                        <ListItemIcon
+                          sx={{
+                            color: location.pathname.startsWith(
+                              "/dashboard/time-accounts",
+                            )
+                              ? "#64ffda"
+                              : "grey.400",
+                            minWidth: open ? 40 : "auto",
+                            mr: open ? 1 : "auto",
+                          }}
+                        >
+                          <AccessTimeIcon />
+                        </ListItemIcon>
+                        {open && (
+                          <>
+                            <ListItemText
+                              primary={
+                                <Typography
+                                  sx={{ fontSize: "0.88rem", fontWeight: 600 }}
+                                >
+                                  Vadeli Hesap İşlemleri
+                                </Typography>
+                              }
+                            />
+                            {timeMenuOpen ? (
+                              <ExpandLess
+                                sx={{ fontSize: 18, color: "grey.400" }}
+                              />
+                            ) : (
+                              <ExpandMore
+                                sx={{ fontSize: 18, color: "grey.400" }}
+                              />
+                            )}
+                          </>
+                        )}
+                      </ListItemButton>
+                    </ListItem>
+                  </Tooltip>
+
+                  {/* ALT MENÜ (COLLAPSE) */}
+                  {open && (
+                    <Collapse in={timeMenuOpen} timeout="auto" unmountOnExit>
+                      <List component="div" disablePadding sx={{ pl: 4 }}>
+                        {/* 1. Hesap Açma */}
+                        <ListItem disablePadding sx={{ mb: 0.3 }}>
+                          <ListItemButton
+                            selected={
+                              location.pathname ===
+                              "/dashboard/time-accounts/open"
+                            }
+                            onClick={() =>
+                              navigate("/dashboard/time-accounts/open")
+                            }
+                            sx={{
+                              borderRadius: 1.5,
+                              py: 0.6,
+                              px: 1.5,
+                              "&.Mui-selected": {
+                                bgcolor: "rgba(100, 255, 218, 0.1)",
+                                color: "#64ffda",
+                              },
+                              "&:hover": { bgcolor: "rgba(255,255,255,0.03)" },
+                            }}
+                          >
+                            <ListItemText
+                              primary={
+                                <Typography
+                                  sx={{ fontSize: "0.82rem", fontWeight: 500 }}
+                                >
+                                  Hesap Açma
+                                </Typography>
+                              }
+                            />
+                          </ListItemButton>
+                        </ListItem>
+
+                        {/* 2. Hesap Güncelleme */}
+                        <ListItem disablePadding sx={{ mb: 0.3 }}>
+                          <ListItemButton
+                            selected={
+                              location.pathname ===
+                              "/dashboard/time-accounts/update"
+                            }
+                            onClick={() =>
+                              navigate("/dashboard/time-accounts/update")
+                            }
+                            sx={{
+                              borderRadius: 1.5,
+                              py: 0.6,
+                              px: 1.5,
+                              "&.Mui-selected": {
+                                bgcolor: "rgba(100, 255, 218, 0.1)",
+                                color: "#64ffda",
+                              },
+                              "&:hover": { bgcolor: "rgba(255,255,255,0.03)" },
+                            }}
+                          >
+                            <ListItemText
+                              primary={
+                                <Typography
+                                  sx={{ fontSize: "0.82rem", fontWeight: 500 }}
+                                >
+                                  Hesap Güncelleme
+                                </Typography>
+                              }
+                            />
+                          </ListItemButton>
+                        </ListItem>
+
+                        {/* 3. Hesap Kapama */}
+                        <ListItem disablePadding sx={{ mb: 0.3 }}>
+                          <ListItemButton
+                            selected={
+                              location.pathname ===
+                              "/dashboard/time-accounts/close"
+                            }
+                            onClick={() =>
+                              navigate("/dashboard/time-accounts/close")
+                            }
+                            sx={{
+                              borderRadius: 1.5,
+                              py: 0.6,
+                              px: 1.5,
+                              "&.Mui-selected": {
+                                bgcolor: "rgba(100, 255, 218, 0.1)",
+                                color: "#64ffda",
+                              },
+                              "&:hover": { bgcolor: "rgba(255,255,255,0.03)" },
+                            }}
+                          >
+                            <ListItemText
+                              primary={
+                                <Typography
+                                  sx={{ fontSize: "0.82rem", fontWeight: 500 }}
+                                >
+                                  Hesap Kapama
+                                </Typography>
+                              }
+                            />
+                          </ListItemButton>
+                        </ListItem>
+                      </List>
+                    </Collapse>
+                  )}
+                </>
+              )}
               {(hasPerm("para:yatirma") || hasPerm("para:cekme")) && (
                 <Tooltip
                   title={!open ? "Gişe & Kasa İşlemleri" : ""}

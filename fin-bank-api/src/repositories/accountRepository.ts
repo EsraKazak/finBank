@@ -121,3 +121,49 @@ export const updateAccountName = async (
     },
   });
 };
+
+// tablosmuzdan faiz oranlırnı çektiğimiz kısım
+export const findMatchingInterestRate = async (
+  currencyId: number,
+  termDays: number,
+  amount: number,
+) => {
+  return await prisma.interestRate.findFirst({
+    where: {
+      currencyId,
+      isActive: true,
+      minTermDays: { lte: termDays },
+      maxTermDays: { gte: termDays },
+      minAmount: { lte: amount },
+      maxAmount: { gte: amount },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+};
+
+// vadeli güncellemede günü değiştirdiğimizde faizin değişmesini sağlayan method
+export const updateTimeDepositAccount = async (
+  accountId: number,
+  data: {
+    name?: string;
+    maturityDays?: number;
+    maturityStart?: Date;
+    maturityEnd?: Date;
+    interestRate?: number;
+    renewalType?: RenewalType;
+    updatedById: string;
+  },
+) => {
+  return prisma.account.update({
+    where: { id: accountId },
+    data,
+    include: {
+      product: true,
+      currency: true,
+      branch: true,
+      customer: true,
+    },
+  });
+};

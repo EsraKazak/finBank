@@ -184,6 +184,7 @@ model Currency {
 
   accounts          Account[]
   productCurrencies ProductCurrency[]
+  interestRates InterestRate[]
 
   @@map("currencies")
 }
@@ -214,6 +215,7 @@ model ProductCurrency {
 
   product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   currency    Currency @relation(fields: [currencyId], references: [id], onDelete: Cascade)
+  
 
   @@unique([productId, currencyId])
   @@map("product_currencies")
@@ -310,4 +312,23 @@ model AccountingRecord {
   createdAt       DateTime        @default(now())
 
   @@map("accounting_records")
+}
+
+model InterestRate {
+  id           String   @id @default(uuid())
+  currencyId   Int
+  currency     Currency @relation(fields: [currencyId], references: [id], onDelete: Restrict)
+
+  minTermDays  Int
+  maxTermDays  Int
+  minAmount    Decimal  @db.Decimal(18, 2)
+  maxAmount    Decimal  @db.Decimal(18, 2)
+  rate         Decimal  @db.Decimal(5, 2)
+
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([currencyId, isActive])
+  @@map("interest_rates")
 }

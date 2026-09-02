@@ -19,6 +19,9 @@ import { ApprovalsPage } from "../pages/dashboard/ApprovalsPage";
 import { EndOfDayPage } from "../pages/dashboard/EndOfDayPage";
 import { AuditPage } from "../pages/dashboard/AuditPage";
 import { DemandAccountsPage } from "../pages/dashboard/DemandAccountsPage";
+import { TimeAccountOpenPage } from "../pages/dashboard/TimeAccountOpenPage";
+import { TimeAccountUpdatePage } from "../pages/dashboard/TimeAccountUpdatePage";
+import { CustomerAccountsPage } from "../pages/dashboard/CustomerAccountsPage";
 
 export const router = createBrowserRouter([
   // 1. Sadece Giriş Yapmamışlara Açık Alan (Public)
@@ -58,7 +61,7 @@ export const router = createBrowserRouter([
             element: <OverviewPage />,
           },
 
-          // Sadece Yönetici / Personel Yönetimi Yetkisi Olanlar
+          // Personel Yönetimi Yetkisi
           {
             element: <RoleGuard requiredPermission="personel:yonetimi" />,
             children: [
@@ -73,7 +76,7 @@ export const router = createBrowserRouter([
             ],
           },
 
-          // Müşteri Yönetimi Yetkisi
+          // Müşteri & Hesap Yönetimi Yetkisi
           {
             element: <RoleGuard requiredPermission="musteri:goruntule" />,
             children: [
@@ -82,11 +85,34 @@ export const router = createBrowserRouter([
                 element: <CustomersPage />,
               },
               {
+                path: "customers/:customerId/accounts",
+                element: <CustomerAccountsPage />,
+              },
+              {
                 path: "demand-accounts",
                 element: <DemandAccountsPage />,
               },
+              // Vadeli hesap işlemleri tek çatı altında
+              {
+                path: "time-accounts",
+                children: [
+                  {
+                    path: "open",
+                    element: <TimeAccountOpenPage />,
+                  },
+                  {
+                    path: "update",
+                    element: <TimeAccountUpdatePage />,
+                  },
+                  {
+                    path: "close",
+                    element: <NotFoundPage />,
+                  },
+                ],
+              },
             ],
           },
+
           // Gişe İşlemleri Yetkisi
           {
             element: <RoleGuard requiredPermission="para:yatirma" />,
@@ -116,7 +142,7 @@ export const router = createBrowserRouter([
             ],
           },
 
-          // Onay Yetkisi (Şube Müdürü vb.)
+          // Onay Yetkisi
           {
             element: <RoleGuard requiredPermission="islem:limit_ustu:onay" />,
             children: [

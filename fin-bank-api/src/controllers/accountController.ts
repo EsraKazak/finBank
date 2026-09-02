@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import * as accountService from "../services/accountService";
 import prisma from "../config/prisma";
+import { findMatchingInterestRate } from "../repositories/accountRepository";
 
 export const getAccountParametersHandler = async (
   _req: Request,
@@ -41,9 +42,14 @@ export const openAccountHandler = async (req: Request, res: Response) => {
       productId,
       currencyId,
       name,
+      initialAmount,
+      sourceAccountId,
+      targetAccountId,
       interestRate,
       renewalType,
       maturityDays,
+      maturityStart,
+      maturityEnd,
     } = req.body;
     const userId = (req as any).user?.id;
 
@@ -59,6 +65,12 @@ export const openAccountHandler = async (req: Request, res: Response) => {
       productId: Number(productId),
       currencyId: Number(currencyId),
       name,
+      initialAmount:
+        initialAmount !== undefined && initialAmount !== ""
+          ? Number(initialAmount)
+          : 0,
+      sourceAccountId: sourceAccountId ? Number(sourceAccountId) : undefined,
+      targetAccountId: targetAccountId ? Number(targetAccountId) : undefined,
       interestRate:
         interestRate !== undefined && interestRate !== ""
           ? Number(interestRate)
@@ -68,6 +80,8 @@ export const openAccountHandler = async (req: Request, res: Response) => {
         maturityDays !== undefined && maturityDays !== ""
           ? Number(maturityDays)
           : undefined,
+      maturityStart: maturityStart ? new Date(maturityStart) : undefined,
+      maturityEnd: maturityEnd ? new Date(maturityEnd) : undefined,
       userId,
     });
 
@@ -127,7 +141,6 @@ export const updateAccountStatusHandler = async (
 ) => {
   try {
     const accountId = Number(req.params.id);
-    // 1. transferToAccountId parametresini body'den alıyoruz:
     const { status, transferToAccountId } = req.body;
     const userId = (req as any).user?.id;
 
@@ -138,7 +151,6 @@ export const updateAccountStatusHandler = async (
       });
     }
 
-    // 2. Servise 4. parametre olarak iletiyoruz:
     const updatedAccount = await accountService.changeAccountStatus(
       accountId,
       status,
@@ -182,6 +194,105 @@ export const updateAccountNameHandler = async (req: Request, res: Response) => {
     return res.status(400).json({
       success: false,
       message: error.message || "Hesap adı güncellenemedi.",
+    });
+  }
+};
+
+// Ekrana otomatik faiz oranı gelmesi için
+export const getApplicableInterestRate = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { currencyId, termDays, amount } = req.query;
+
+    if (!currencyId || !termDays || !amount) {
+      return res.status(400).json({
+        message: "currencyId, termDays ve amount parametreleri zorunludur.",
+      });
+    }
+
+    const rateRecord = await findMatchingInterestRate(
+      Number(currencyId),
+      Number(termDays),
+      Number(amount),
+    );
+
+    if (!rateRecord) {
+      return res.status(404).json({
+        message: "Girilen kriterlere uygun faiz oranı bulunamadı.",
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        rate: rateRecord.rate,
+        minTermDays: rateRecord.minTermDays,
+        maxTermDays: rateRecord.maxTermDays,
+        minAmount: rateRecord.minAmount,
+        maxAmount: rateRecord.maxAmount,
+      },
+    });
+  } catch (error: any) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+// Vadeli hesap güncelleme işlemi
+export const updateTimeDepositAccountController = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const accountId = Number(req.params.id);
+    const userId = (req as any).user?.id || (req as any).user?.userId;
+    const result = await accountService.updateTimeAccount({
+      accountId,
+      ...req.body,
+      userId,
+    });
+    return res.json({
+      success: true,
+      data: result,
+      message: "Vadeli hesap başarıyla güncellendi.",
+    });
+  } catch (error: any) {
+    return res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+// Hesap detaylarını getiren controller
+export const getAccountByIdHandler = async (req: Request, res: Response) => {
+  try {
+    const accountId = Number(req.params.id);
+    if (!accountId) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Geçersiz hesap ID." });
+    }
+
+    const account = await prisma.account.findUnique({
+      where: { id: accountId },
+      include: {
+        product: true,
+        currency: true,
+        branch: true,
+        customer: true,
+      },
+    });
+
+    if (!account) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Hesap bulunamadı." });
+    }
+
+    return res.status(200).json({ success: true, data: account });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: "Hesap detayları getirilirken hata oluştu.",
     });
   }
 };

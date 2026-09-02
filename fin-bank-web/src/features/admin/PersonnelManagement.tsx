@@ -150,6 +150,7 @@ export const PersonnelManagement: React.FC<{
       {
         headerName: "Görev Şubesi",
         field: "branch",
+        valueGetter: (params) => params.data?.branch?.name || "-",
         flex: 1.2,
         cellRenderer: (params: any) => {
           const branch = params.data?.branch;

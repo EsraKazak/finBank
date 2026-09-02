@@ -1,5 +1,6 @@
 export type AccountStatus = "ACTIVE" | "BLOCKED" | "CLOSED";
 export type AccountType = "DEMAND" | "TIME";
+export type RenewalType = "PRINCIPAL_AND_INTEREST" | "PRINCIPAL_ONLY" | "CLOSE";
 
 export interface Currency {
   id: number;
@@ -33,6 +34,21 @@ export interface Account {
   status: AccountStatus;
   productId: number;
   currencyId: number;
+  interestRate?: number | string | null;
+  renewalType?: RenewalType | null;
+  maturityDays?: number | null;
+  maturityStart?: string | null;
+  maturityEnd?: string | null;
   product?: Product;
   currency?: Currency;
+}
+
+export interface CreateTimeAccountDTO {
+  customerId: number;
+  productId: number;
+  currencyId: number;
+  name: string;
+  interestRate: number;
+  renewalType: RenewalType;
+  maturityDays: number;
 }

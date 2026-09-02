@@ -9,9 +9,14 @@ interface OpenAccountDTO {
   productId: number;
   currencyId: number;
   name: string;
+  initialAmount?: number;
+  sourceAccountId?: number;
+  targetAccountId?: number;
   interestRate?: number;
   renewalType?: RenewalType;
   maturityDays?: number;
+  maturityStart?: Date;
+  maturityEnd?: Date;
   userId: string;
 }
 
@@ -21,9 +26,13 @@ export const openAccount = async (dto: OpenAccountDTO) => {
     productId,
     currencyId,
     name,
+    initialAmount = 0,
+    sourceAccountId,
     interestRate,
     renewalType,
     maturityDays,
+    maturityStart,
+    maturityEnd,
     userId,
   } = dto;
 
@@ -54,46 +63,83 @@ export const openAccount = async (dto: OpenAccountDTO) => {
   }
 
   const product = rule.product;
+  const isTimeDeposit = product.type === "TIME";
 
   // 3. Vadeli / Vadesiz Kontrolleri
   let finalInterestRate: number | null = null;
   let finalRenewalType: RenewalType | null = null;
-  let maturityStart: Date | null = null;
-  let maturityEnd: Date | null = null;
+  let finalMaturityStart: Date | null = null;
+  let finalMaturityEnd: Date | null = null;
   let finalMaturityDays: number | null = null;
 
-  if (product.type === "TIME") {
+  if (isTimeDeposit) {
     if (!maturityDays || maturityDays < 1) {
       throw new Error("Vadeli hesap için vade gün sayısı belirtilmelidir.");
     }
     if (!renewalType) {
       throw new Error("Vadeli hesap için temdit tipi seçilmelidir.");
     }
-    if (interestRate === undefined || interestRate === null) {
-      throw new Error("Vadeli hesap için faiz oranı girilmelidir.");
-    }
-
-    if (rule.minInterest && interestRate < Number(rule.minInterest)) {
+    if (initialAmount <= 0 || !sourceAccountId) {
       throw new Error(
-        `Uygulanan faiz, taban faizden (%${rule.minInterest}) düşük olamaz.`,
-      );
-    }
-    if (rule.maxInterest && interestRate > Number(rule.maxInterest)) {
-      throw new Error(
-        `Uygulanan faiz, tavan faizden (%${rule.maxInterest}) yüksek olamaz.`,
+        "Vadeli hesap açılışında bir kaynak vadesiz hesap ve başlangıç açılış tutarı belirtilmelidir.",
       );
     }
 
-    finalInterestRate = interestRate;
+    if (initialAmount <= 0 || !sourceAccountId) {
+      throw new Error(
+        "Vadeli hesap açılışında bir kaynak vadesiz hesap ve başlangıç açılış tutarı belirtilmelidir.",
+      );
+    }
+
+    // Faiz oranı ve vade gün sayısına göre uygun faiz oranını bul
+    const matchingRateRecord = await accountRepository.findMatchingInterestRate(
+      currencyId,
+      maturityDays,
+      initialAmount,
+    );
+
+    if (!matchingRateRecord) {
+      throw new Error(
+        `${rule.currency.code} para biriminde ${maturityDays} gün vade ve ${initialAmount.toFixed(2)} tutar için tanımlı faiz oranı bulunamadı.`,
+      );
+    }
+
+    finalInterestRate = Number(matchingRateRecord.rate);
+
+    //tavan taban faiz oranı kontrolü
+    if (rule.minInterest && finalInterestRate < Number(rule.minInterest)) {
+      throw new Error(
+        `Belirlenen faiz oranı (%${finalInterestRate}), ürün taban faizinden (%${rule.minInterest}) düşük olamaz.`,
+      );
+    }
+    if (rule.maxInterest && finalInterestRate > Number(rule.maxInterest)) {
+      throw new Error(
+        `Belirlenen faiz oranı (%${finalInterestRate}), ürün tavan faizinden (%${rule.maxInterest}) yüksek olamaz.`,
+      );
+    }
+
     finalRenewalType = renewalType;
     finalMaturityDays = maturityDays;
 
-    const startDate = new Date();
-    const endDate = new Date(startDate);
-    endDate.setDate(startDate.getDate() + maturityDays);
+    // Hafta sonunu bir sonraki iş gününe öteleyen yardımcı fonksiyon
+    const adjustToNextBusinessDay = (date: Date): Date => {
+      const d = new Date(date);
+      const day = d.getDay();
+      if (day === 6)
+        d.setDate(d.getDate() + 2); // Cumartesi -> Pazartesi
+      else if (day === 0) d.setDate(d.getDate() + 1); // Pazar -> Pazartesi
+      return d;
+    };
 
-    maturityStart = startDate;
-    maturityEnd = endDate;
+    finalMaturityStart = maturityStart || new Date();
+
+    if (maturityEnd) {
+      finalMaturityEnd = adjustToNextBusinessDay(new Date(maturityEnd));
+    } else {
+      const calculatedEnd = new Date(finalMaturityStart);
+      calculatedEnd.setDate(calculatedEnd.getDate() + maturityDays);
+      finalMaturityEnd = adjustToNextBusinessDay(calculatedEnd);
+    }
   }
 
   // 4. Hesap sırasını ve IBAN'ı belirle
@@ -107,13 +153,45 @@ export const openAccount = async (dto: OpenAccountDTO) => {
     nextAccountNumber,
   );
 
-  // 5. Transaction: Hem hesabı aç hem de Açılış Muhasebe Fişini kes
+  // 5. Transaction: Kaynak hesaptan düş + Yeni hesabı aç + Muhasebe Fişi kes
   return await prisma.$transaction(async (tx) => {
+    // Vadeli hesap ise kaynak vadesiz hesabın bakiyesini kontrol et ve düş
+    if (isTimeDeposit && initialAmount > 0 && sourceAccountId) {
+      const sourceAccount = await tx.account.findUnique({
+        where: { id: sourceAccountId },
+        include: { currency: true },
+      });
+
+      if (!sourceAccount || sourceAccount.status !== "ACTIVE") {
+        throw new Error("Kaynak vadesiz hesap bulunamadı veya aktif değil.");
+      }
+
+      if (sourceAccount.currencyId !== currencyId) {
+        throw new Error(
+          `Kaynak hesap para birimi (${sourceAccount.currency.code}) ile vadeli hesap para birimi (${rule.currency.code}) aynı olmalıdır.`,
+        );
+      }
+
+      if (Number(sourceAccount.balance) < initialAmount) {
+        throw new Error(
+          `Kaynak hesapta yetersiz bakiye. Mevcut Bakiye: ${Number(sourceAccount.balance).toFixed(2)} ${sourceAccount.currency.code}`,
+        );
+      }
+
+      // Kaynak vadesiz hesaptan tutarı düş
+      await tx.account.update({
+        where: { id: sourceAccountId },
+        data: { balance: { decrement: initialAmount } },
+      });
+    }
+
+    // Yeni vadeli/vadesiz hesabı oluştur
     const newAccount = await tx.account.create({
       data: {
         accountNumber: nextAccountNumber,
         iban,
         name: name.trim(),
+        balance: isTimeDeposit ? initialAmount : 0,
         customerId,
         branchId: customer.branchId,
         productId,
@@ -121,8 +199,8 @@ export const openAccount = async (dto: OpenAccountDTO) => {
         createdById: userId,
         interestRate: finalInterestRate,
         renewalType: finalRenewalType,
-        maturityStart,
-        maturityEnd,
+        maturityStart: finalMaturityStart,
+        maturityEnd: finalMaturityEnd,
         maturityDays: finalMaturityDays,
       },
       include: {
@@ -133,14 +211,16 @@ export const openAccount = async (dto: OpenAccountDTO) => {
       },
     });
 
-    // Açılış Fişi Kaydı
+    // Muhasebe Fişi Kaydı
     const receiptNumber = generateReceiptNumber(customer.branch.code);
     await tx.accountingRecord.create({
       data: {
         receiptNumber,
-        type: "OTHER",
-        amount: 0.0,
-        description: `Hesap Açılış Kaydı: ${newAccount.accountNumber} - ${newAccount.name} (${rule.currency.code})`,
+        type: isTimeDeposit ? "TRANSFER" : "OTHER",
+        amount: isTimeDeposit ? initialAmount : 0.0,
+        description: isTimeDeposit
+          ? `Vadeli Hesap Açılış Virmanı: [${sourceAccountId}] -> [${newAccount.accountNumber}] (${initialAmount} ${rule.currency.code})`
+          : `Hesap Açılış Kaydı: ${newAccount.accountNumber} - ${newAccount.name} (${rule.currency.code})`,
         branchId: customer.branchId,
         accountId: newAccount.id,
         createdById: userId,
@@ -155,7 +235,6 @@ export const getCustomerAccounts = async (customerId: number) => {
   return await accountRepository.listAccountsByCustomerId(customerId);
 };
 
-// GÜNCELLENEN DURUM DEĞİŞTİRME VE HESAP KAPATMA VİRMANI METODU
 export const changeAccountStatus = async (
   accountId: number,
   newStatus: AccountStatus,
@@ -183,7 +262,6 @@ export const changeAccountStatus = async (
 
   const balance = Number(account.balance);
 
-  // Fiş açıklamalarını duruma göre dinamik belirle
   const statusDescriptions: Record<AccountStatus, string> = {
     BLOCKED: `Hesap Bloke Fişi: ${account.accountNumber} nolu hesaba bloke konuldu.`,
     ACTIVE: `Hesap Bloke Kaldırma Fişi: ${account.accountNumber} nolu hesabın blokesi kaldırıldı.`,
@@ -191,7 +269,6 @@ export const changeAccountStatus = async (
   };
 
   return await prisma.$transaction(async (tx) => {
-    // 1. Kapatma durumunda bakiye kontrolü ve virman tahliyesi
     if (newStatus === "CLOSED" && balance > 0) {
       if (!transferToAccountId) {
         throw new Error(
@@ -222,19 +299,16 @@ export const changeAccountStatus = async (
         );
       }
 
-      // Kapatılan hesabın bakiyesini sıfırla
       await tx.account.update({
         where: { id: accountId },
         data: { balance: 0 },
       });
 
-      // Hedef hesabın bakiyesini artır
       await tx.account.update({
         where: { id: transferToAccountId },
         data: { balance: { increment: balance } },
       });
 
-      // Bakiye transferi için muhasebe kaydı (Virman Fişi) oluştur
       const transferReceiptNumber = generateReceiptNumber(account.branch.code);
       await tx.accountingRecord.create({
         data: {
@@ -249,7 +323,6 @@ export const changeAccountStatus = async (
       });
     }
 
-    // 2. Hesap durumunu güncelle (ACTIVE, BLOCKED veya CLOSED)
     const updatedAccount = await tx.account.update({
       where: { id: accountId },
       data: {
@@ -263,7 +336,6 @@ export const changeAccountStatus = async (
       },
     });
 
-    // 3. Durum değişikliği için muhasebe fişi kes
     const receiptNumber = generateReceiptNumber(account.branch.code);
     await tx.accountingRecord.create({
       data: {
@@ -297,4 +369,70 @@ export const renameAccount = async (
     throw new Error("Hesap adı boş bırakılamaz.");
   }
   return await accountRepository.updateAccountName(accountId, newName, userId);
+};
+
+//vade değiştiğinde mevcut bakiye üzerinden faiz oranını otomatik bulup güncelleme
+export const updateTimeAccount = async (data: {
+  accountId: number;
+  maturityDays?: number;
+  maturityStart?: Date;
+  maturityEnd?: Date;
+  renewalType?: RenewalType;
+  targetAccountId?: number | null;
+  userId: string;
+}) => {
+  const account = await accountRepository.findAccountById(data.accountId);
+
+  if (!account) {
+    throw new Error("Hesap bulunamadı.");
+  }
+  if (account.product.type !== "TIME") {
+    throw new Error(
+      "Sadece vadeli mevduat hesapları bu ekrandan güncellenebilir.",
+    );
+  }
+  if (account.status !== "ACTIVE") {
+    throw new Error(
+      "Yalnızca aktif vadeli hesaplar üzerinde güncelleme yapılabilir.",
+    );
+  }
+
+  let finalInterestRate = Number(account.interestRate);
+  const newMaturityDays = data.maturityDays ?? account.maturityDays;
+
+  // Vade günü değiştiyse yeni faiz oranını tablodan otomatik bul
+  if (data.maturityDays && data.maturityDays !== account.maturityDays) {
+    const rateRecord = await accountRepository.findMatchingInterestRate(
+      account.currencyId,
+      newMaturityDays!,
+      Number(account.balance),
+    );
+
+    if (!rateRecord) {
+      throw new Error(
+        `${account.currency.code} para biriminde ${newMaturityDays} gün ve ${Number(account.balance).toFixed(2)} bakiye için uygun faiz oranı bulunamadı.`,
+      );
+    }
+    finalInterestRate = Number(rateRecord.rate);
+  }
+
+  // Temdit tipi "Sadece Anapara" veya "Kapat" seçildiyse hedef hesap kontrolü
+  if (
+    data.renewalType &&
+    data.renewalType !== "PRINCIPAL_AND_INTEREST" &&
+    !data.targetAccountId
+  ) {
+    throw new Error(
+      "Seçilen temdit türü için hedef vadesiz hesap seçilmelidir.",
+    );
+  }
+
+  return await accountRepository.updateTimeDepositAccount(data.accountId, {
+    maturityDays: newMaturityDays ?? undefined,
+    maturityStart: data.maturityStart,
+    maturityEnd: data.maturityEnd,
+    interestRate: finalInterestRate,
+    renewalType: data.renewalType,
+    updatedById: data.userId,
+  });
 };

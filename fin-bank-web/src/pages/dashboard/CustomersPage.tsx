@@ -23,8 +23,6 @@ import {
 import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import SearchIcon from "@mui/icons-material/Search";
 import BadgeIcon from "@mui/icons-material/Badge";
-import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
-import PaymentsIcon from "@mui/icons-material/Payments";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, PaginationChangedEvent } from "ag-grid-community";
 import api from "../../services/api";
@@ -216,6 +214,7 @@ export const CustomersPage: React.FC = () => {
       {
         headerName: "Kayıt Şubesi",
         field: "branch",
+        valueGetter: (params) => params.data?.branch?.name || "-",
         flex: 1.1,
         minWidth: 150,
         cellRenderer: (params: any) => {
@@ -260,47 +259,15 @@ export const CustomersPage: React.FC = () => {
             }}
           >
             <Button
-              size="small"
               variant="contained"
-              color="primary"
-              startIcon={<AccountBalanceWalletIcon sx={{ fontSize: 16 }} />}
-              onClick={() =>
-                navigate(
-                  `/dashboard/demand-accounts?customerId=${params.value}`,
-                )
-              }
-              sx={{
-                textTransform: "none",
-                fontSize: "0.75rem",
-                fontWeight: 700,
-                py: 0.3,
-                px: 1.2,
-                borderRadius: 1.5,
-              }}
-            >
-              Hesaplar
-            </Button>
-
-            <Button
               size="small"
-              variant="outlined"
-              color="success"
-              startIcon={<PaymentsIcon sx={{ fontSize: 16 }} />}
               onClick={() =>
-                navigate(
-                  `/dashboard/cashier/withdraw?customerId=${params.value}`,
-                )
+                navigate(`/dashboard/customers/${params.data.id}/accounts`, {
+                  state: { customer: params.data },
+                })
               }
-              sx={{
-                textTransform: "none",
-                fontSize: "0.75rem",
-                fontWeight: 700,
-                py: 0.3,
-                px: 1.2,
-                borderRadius: 1.5,
-              }}
             >
-              Gişe / Para
+              Hesaplar & İşlemler
             </Button>
           </Box>
         ),
@@ -394,6 +361,7 @@ export const CustomersPage: React.FC = () => {
       >
         <div className="ag-theme-alpine" style={{ height: 520, width: "100%" }}>
           <AgGridReact
+            theme="legacy"
             rowData={customers}
             columnDefs={columnDefs}
             loading={isLoading}

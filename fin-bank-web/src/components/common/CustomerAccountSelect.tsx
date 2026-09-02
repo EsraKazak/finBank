@@ -14,6 +14,7 @@ import { AgGridReact } from "ag-grid-react";
 import type { ColDef, RowClickedEvent, RowStyle } from "ag-grid-community";
 import api from "../../services/api";
 import type { Account } from "../../types/account.types";
+import { themeAlpine } from "ag-grid-community";
 
 export interface CustomerAccountSelectProps {
   customerId: number;
@@ -26,6 +27,7 @@ export interface CustomerAccountSelectProps {
   includeClosed?: boolean;
   filterOnlyActive?: boolean;
   refreshTrigger?: number;
+  allowedProductTypes?: Array<"DEMAND" | "TIME" | string>;
 }
 
 export const CustomerAccountSelect: React.FC<CustomerAccountSelectProps> = ({
@@ -39,6 +41,7 @@ export const CustomerAccountSelect: React.FC<CustomerAccountSelectProps> = ({
   includeClosed = false,
   filterOnlyActive = true,
   refreshTrigger = 0,
+  allowedProductTypes = ["DEMAND"],
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
@@ -60,18 +63,25 @@ export const CustomerAccountSelect: React.FC<CustomerAccountSelectProps> = ({
         `/accounts/customer/${customerId}`,
       );
 
-      let demandAccounts = (res.data.data || []).filter(
-        (a) => a.product?.type === "DEMAND",
+      const allAccounts = res.data.data || [];
+
+      // İzin verilen ürün tiplerine göre dinamik filtreleme
+      let filteredAccounts = allAccounts.filter((a) =>
+        a.product?.type ? allowedProductTypes.includes(a.product.type) : true,
       );
 
       if (!includeClosed) {
-        demandAccounts = demandAccounts.filter((a) => a.status !== "CLOSED");
+        filteredAccounts = filteredAccounts.filter(
+          (a) => a.status !== "CLOSED",
+        );
       }
 
-      setAccounts(demandAccounts);
+      setAccounts(filteredAccounts);
 
-      if (selectedAccountId) {
-        const matched = demandAccounts.find((a) => a.id === selectedAccountId);
+      if (selectedAccountId && !value) {
+        const matched = filteredAccounts.find(
+          (a) => a.id === selectedAccountId,
+        );
         if (matched) onChange(matched);
       }
     } catch (err) {
@@ -81,9 +91,12 @@ export const CustomerAccountSelect: React.FC<CustomerAccountSelectProps> = ({
     }
   };
 
+  // Dizi değerlerini virgülle birleştirip stabil bir primitive string elde et
+  const productTypesKey = allowedProductTypes?.join(",") || "ALL";
+
   useEffect(() => {
     fetchAccounts();
-  }, [customerId, refreshTrigger, includeClosed]);
+  }, [customerId, refreshTrigger, includeClosed, productTypesKey]);
 
   const displayAccounts = useMemo(() => {
     if (!excludeAccountId) return accounts;
@@ -227,6 +240,7 @@ export const CustomerAccountSelect: React.FC<CustomerAccountSelectProps> = ({
         open={isOpen}
         anchorEl={anchorEl}
         onClose={handleClose}
+        disableRestoreFocus
         anchorOrigin={{
           vertical: "bottom",
           horizontal: isMobile ? "center" : "left",
@@ -271,18 +285,18 @@ export const CustomerAccountSelect: React.FC<CustomerAccountSelectProps> = ({
         </Box>
 
         <div
-          className="ag-theme-alpine"
           style={{
             height: isMobile ? 240 : 290,
             width: "100%",
           }}
         >
           <AgGridReact
+            theme={themeAlpine}
             rowData={displayAccounts}
             columnDefs={columnDefs}
             loading={loading}
             onRowClicked={handleRowClick}
-            rowSelection="single"
+            rowSelection={{ mode: "singleRow", enableClickSelection: true }}
             getRowStyle={(params): RowStyle | undefined => {
               const isSelected = params.data?.id === selectedAccount?.id;
               const isBlocked = params.data?.status === "BLOCKED";
