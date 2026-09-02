@@ -75,7 +75,7 @@ export const TimeAccountOpenPage: React.FC = () => {
   // Parametre State'leri
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [timeProductId, setTimeProductId] = useState<number | null>(null);
-  const [rules, setRules] = useState<ProductCurrency[]>([]);
+  const [_rules, setRules] = useState<ProductCurrency[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Dekont Modalı State'leri
