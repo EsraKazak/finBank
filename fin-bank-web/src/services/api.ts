@@ -126,4 +126,20 @@ export const adminApi = {
   },
 };
 
+// Hesaplarla ilgili API çağrıları
+export const getCustomerAccounts = async (
+  customerId: number | string,
+  accountType?: string, // 'DEMAND' veya 'TIME'
+) => {
+  const response = await api.get(`/accounts/customer/${customerId}`, {
+    params: accountType ? { accountType } : undefined,
+  });
+  return response.data?.data ?? response.data;
+};
+
+// İsterseniz toplu hesap API objesi olarak da dışa aktarabilirsiniz:
+export const accountApi = {
+  getCustomerAccounts,
+};
+
 export default api;

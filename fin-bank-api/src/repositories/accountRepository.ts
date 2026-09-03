@@ -1,5 +1,5 @@
 import prisma from "../config/prisma";
-import type { RenewalType, AccountStatus } from "@prisma/client";
+import type { RenewalType, AccountStatus, AccountType } from "@prisma/client";
 
 export const findLastAccountNumberByCustomer = async (
   customerId: number,
@@ -65,9 +65,27 @@ export const createAccount = async (data: {
   });
 };
 
-export const listAccountsByCustomerId = async (customerId: number) => {
+export const listAccountsByCustomerId = async (
+  customerId: number,
+  accountType?: string,
+) => {
+  const types = accountType
+    ? (accountType
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean) as AccountType[])
+    : undefined;
+
   return prisma.account.findMany({
-    where: { customerId },
+    where: {
+      customerId,
+      ...(types &&
+        types.length > 0 && {
+          product: {
+            type: { in: types },
+          },
+        }),
+    },
     include: {
       product: true,
       currency: true,

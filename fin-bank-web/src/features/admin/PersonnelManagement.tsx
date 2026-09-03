@@ -168,7 +168,7 @@ export const PersonnelManagement: React.FC<{
       },
       {
         headerName: "Tanımlanan Rol",
-        field: "role",
+        field: "role.name",
         flex: 1.4,
         cellRenderer: (params: any) => {
           const roleName = params.data?.role?.name;

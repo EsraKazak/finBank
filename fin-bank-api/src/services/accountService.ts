@@ -231,8 +231,14 @@ export const openAccount = async (dto: OpenAccountDTO) => {
   });
 };
 
-export const getCustomerAccounts = async (customerId: number) => {
-  return await accountRepository.listAccountsByCustomerId(customerId);
+export const getCustomerAccounts = async (
+  customerId: number,
+  accountType?: "DEMAND" | "TIME",
+) => {
+  return await accountRepository.listAccountsByCustomerId(
+    customerId,
+    accountType,
+  );
 };
 
 export const changeAccountStatus = async (

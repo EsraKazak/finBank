@@ -12,9 +12,7 @@ import {
 } from "@mui/material";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef } from "ag-grid-community";
-import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-alpine.css";
+import { themeAlpine, type ColDef } from "ag-grid-community";
 import api from "../../services/api";
 import type { Customer } from "../../types/customer.types";
 import { CustomerInfoCard } from "../../components/common/CustomerInfoCard"; // Bileşenin tam yolu
@@ -219,13 +217,10 @@ export const CustomerAccountsPage: React.FC = () => {
       {/* AG Grid Tablosu */}
       <Card sx={{ borderRadius: 2, overflow: "hidden" }}>
         <CardContent sx={{ p: 0, "&:last-child": { pb: 0 } }}>
-          <div
-            className="ag-theme-alpine"
-            style={{ height: 480, width: "100%" }}
-          >
+          <div style={{ height: 600, width: "100%" }}>
             <AgGridReact
-              theme="legacy"
-              rowData={accounts}
+              theme={themeAlpine}
+              rowData={accounts || []}
               columnDefs={columnDefs}
               pagination={true}
               paginationPageSize={10}

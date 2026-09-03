@@ -30,6 +30,7 @@ interface CloseAccountModalProps {
   account: Account | null;
   customerId: number;
   onSuccess: () => void;
+  allowCashPayout?: boolean; // Vadeli hesaplarda false geçilerek nakit opsiyonu kapatılır
 }
 
 export const CloseAccountModal: React.FC<CloseAccountModalProps> = ({
@@ -38,6 +39,7 @@ export const CloseAccountModal: React.FC<CloseAccountModalProps> = ({
   account,
   customerId,
   onSuccess,
+  allowCashPayout = true, // Varsayılan olarak vadesiz hesaplar için true kalır
 }) => {
   const navigate = useNavigate();
   const [closingType, setClosingType] = useState<"TRANSFER" | "CASH">(
@@ -59,8 +61,12 @@ export const CloseAccountModal: React.FC<CloseAccountModalProps> = ({
 
       const fetchTargetAccounts = async () => {
         try {
+          // Virman yapılacak hesaplar yalnızca vadesiz olmalıdır
           const res = await api.get<{ success: boolean; data: Account[] }>(
             `/accounts/customer/${customerId}`,
+            {
+              params: { accountType: "DEMAND" },
+            },
           );
 
           // Kapatılacak hesap hariç, aktif ve aynı para birimindeki hesaplar
@@ -73,8 +79,10 @@ export const CloseAccountModal: React.FC<CloseAccountModalProps> = ({
 
           setAvailableAccounts(validTargets);
 
-          // Alternatif aktif hesap yoksa doğrudan Nakit seçeneğine sabitle
-          if (validTargets.length === 0) {
+          // Eğer nakit çekime izin verilmiyorsa (Vadeli Kapatma) daima TRANSFER kalır
+          if (!allowCashPayout) {
+            setClosingType("TRANSFER");
+          } else if (validTargets.length === 0) {
             setClosingType("CASH");
           } else {
             setClosingType("TRANSFER");
@@ -86,7 +94,7 @@ export const CloseAccountModal: React.FC<CloseAccountModalProps> = ({
 
       fetchTargetAccounts();
     }
-  }, [open, customerId, account]);
+  }, [open, customerId, account, allowCashPayout]);
 
   const handleConfirm = async () => {
     if (!account) return;
@@ -162,7 +170,7 @@ export const CloseAccountModal: React.FC<CloseAccountModalProps> = ({
                 {account.currency?.code || "TRY"}
               </strong>{" "}
               bakiye bulunmaktadır. Hesabın kapatılabilmesi için bakiyenin
-              tahliye edilmesi gerekmektedir.
+              aktarılması gerekmektedir.
             </Alert>
 
             {availableAccounts.length > 0 ? (
@@ -178,24 +186,37 @@ export const CloseAccountModal: React.FC<CloseAccountModalProps> = ({
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
                   Bakiye Tahliye Yöntemi:
                 </Typography>
-                <RadioGroup
-                  value={closingType}
-                  onChange={(e) =>
-                    setClosingType(e.target.value as "TRANSFER" | "CASH")
-                  }
-                  sx={{ mb: 2 }}
-                >
-                  <FormControlLabel
-                    value="TRANSFER"
-                    control={<Radio size="small" />}
-                    label="Başka Bir Hesabıma Aktar (Virman Yap ve Kapat)"
-                  />
-                  <FormControlLabel
-                    value="CASH"
-                    control={<Radio size="small" />}
-                    label="Gişeden Nakit Çek (Gişe Sayfasına Yönlendir)"
-                  />
-                </RadioGroup>
+
+                {/* Eğer nakit ödemeye izin varsa seçenekleri göster, yoksa sadece virmanı kilitle */}
+                {allowCashPayout ? (
+                  <RadioGroup
+                    value={closingType}
+                    onChange={(e) =>
+                      setClosingType(e.target.value as "TRANSFER" | "CASH")
+                    }
+                    sx={{ mb: 2 }}
+                  >
+                    <FormControlLabel
+                      value="TRANSFER"
+                      control={<Radio size="small" />}
+                      label="Başka Bir Hesabıma Aktar (Virman Yap ve Kapat)"
+                    />
+                    <FormControlLabel
+                      value="CASH"
+                      control={<Radio size="small" />}
+                      label="Gişeden Nakit Çek (Gişe Sayfasına Yönlendir)"
+                    />
+                  </RadioGroup>
+                ) : (
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ mb: 2 }}
+                  >
+                    Vadeli hesap bakiyesi yalnızca müşterinin vadesiz hesabına
+                    virman yapılabilir.
+                  </Typography>
+                )}
 
                 {closingType === "TRANSFER" && (
                   <FormControl fullWidth size="small" required sx={{ mt: 1 }}>
@@ -221,10 +242,22 @@ export const CloseAccountModal: React.FC<CloseAccountModalProps> = ({
                 )}
               </Box>
             ) : (
-              <Alert severity="info" sx={{ mt: 1 }}>
-                Müşteriye ait aynı para biriminde başka aktif hesap bulunamadı.
-                Bakiyeyi tahliye etmek için <strong>Gişe Nakit Çekim</strong>{" "}
-                ekranına yönlendirileceksiniz.
+              <Alert severity="error" sx={{ mt: 1 }}>
+                {!allowCashPayout ? (
+                  <>
+                    Müşteriye ait aynı para biriminde aktif bir{" "}
+                    <strong>vadesiz hesap</strong> bulunamadı. Vadeli hesabı
+                    kapatabilmek için önce aynı para biriminde vadesiz hesap
+                    açılmalıdır.
+                  </>
+                ) : (
+                  <>
+                    Müşteriye ait aynı para biriminde başka aktif hesap
+                    bulunamadı. Bakiyeyi tahliye etmek için{" "}
+                    <strong>Gişe Nakit Çekim</strong> ekranına
+                    yönlendirileceksiniz.
+                  </>
+                )}
               </Alert>
             )}
           </Box>
@@ -253,7 +286,8 @@ export const CloseAccountModal: React.FC<CloseAccountModalProps> = ({
           }
           disabled={
             isLoading ||
-            (hasBalance && closingType === "TRANSFER" && !targetAccountId)
+            (hasBalance && closingType === "TRANSFER" && !targetAccountId) ||
+            (hasBalance && !allowCashPayout && availableAccounts.length === 0)
           }
           sx={{
             fontWeight: 700,

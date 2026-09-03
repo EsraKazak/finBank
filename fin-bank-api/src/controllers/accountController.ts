@@ -109,8 +109,12 @@ export const getCustomerAccountsHandler = async (
         .status(400)
         .json({ success: false, message: "Geçersiz müşteri ID." });
     }
+    const accountType = req.query.accountType;
 
-    const accounts = await accountService.getCustomerAccounts(customerId);
+    const accounts = await accountService.getCustomerAccounts(
+      customerId,
+      accountType === "DEMAND" || accountType === "TIME" ? accountType : undefined,
+    );
     return res.status(200).json({ success: true, data: accounts });
   } catch (error: any) {
     return res.status(500).json({

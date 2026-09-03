@@ -115,11 +115,12 @@ export const DemandAccountsPage: React.FC = () => {
     try {
       const res = await api.get<{ success: boolean; data: Account[] }>(
         `/accounts/customer/${selectedCustomer.id}`,
+        {
+          params: { accountType: "DEMAND" }, // Backend'e sadece vadesiz hesapları istediğimizi söylüyoruz
+        },
       );
-      const demandAccounts = (res.data.data || []).filter(
-        (a) => a.product?.type === "DEMAND",
-      );
-      setCustomerAccounts(demandAccounts);
+      // Backend zaten sadece DEMAND olanları döndüğü için doğrudan state'e atıyoruz:
+      setCustomerAccounts(res.data.data || []);
     } catch (err) {
       console.error("Hesaplar yüklenemedi:", err);
     }
@@ -427,6 +428,7 @@ export const DemandAccountsPage: React.FC = () => {
                   includeClosed={false}
                   filterOnlyActive={false}
                   refreshTrigger={refreshTrigger}
+                  allowedProductTypes={["DEMAND"]}
                 />
 
                 {selectedUpdateAccount && (
@@ -611,6 +613,7 @@ export const DemandAccountsPage: React.FC = () => {
                   includeClosed={true}
                   filterOnlyActive={false}
                   refreshTrigger={refreshTrigger}
+                  allowedProductTypes={["DEMAND"]}
                 />
 
                 {selectedCloseAccount && (

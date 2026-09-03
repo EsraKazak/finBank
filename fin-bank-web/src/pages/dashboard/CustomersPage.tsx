@@ -24,7 +24,11 @@ import PersonAddIcon from "@mui/icons-material/PersonAdd";
 import SearchIcon from "@mui/icons-material/Search";
 import BadgeIcon from "@mui/icons-material/Badge";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef, PaginationChangedEvent } from "ag-grid-community";
+import {
+  themeAlpine,
+  type ColDef,
+  type PaginationChangedEvent,
+} from "ag-grid-community";
 import api from "../../services/api";
 import type {
   Customer,
@@ -359,9 +363,9 @@ export const CustomersPage: React.FC = () => {
           overflow: "hidden",
         }}
       >
-        <div className="ag-theme-alpine" style={{ height: 520, width: "100%" }}>
+        <div style={{ height: 600, width: "100%" }}>
           <AgGridReact
-            theme="legacy"
+            theme={themeAlpine}
             rowData={customers}
             columnDefs={columnDefs}
             loading={isLoading}

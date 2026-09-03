@@ -490,7 +490,7 @@ export const DashboardPage: React.FC = () => {
                                 <Typography
                                   sx={{ fontSize: "0.88rem", fontWeight: 600 }}
                                 >
-                                  Vadeli Hesap İşlemleri
+                                  Vadeli Hesap Yönetimi
                                 </Typography>
                               }
                             />
@@ -657,7 +657,7 @@ export const DashboardPage: React.FC = () => {
                             <Typography
                               sx={{ fontSize: "0.88rem", fontWeight: 600 }}
                             >
-                              Gişe & Kasa İşlemleri
+                              Vadesiz Gişe İşlemleri
                             </Typography>
                           }
                         />

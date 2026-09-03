@@ -22,6 +22,7 @@ import { DemandAccountsPage } from "../pages/dashboard/DemandAccountsPage";
 import { TimeAccountOpenPage } from "../pages/dashboard/TimeAccountOpenPage";
 import { TimeAccountUpdatePage } from "../pages/dashboard/TimeAccountUpdatePage";
 import { CustomerAccountsPage } from "../pages/dashboard/CustomerAccountsPage";
+import { TimeAccountClosePage } from "../pages/dashboard/TimeAccountClosePage";
 
 export const router = createBrowserRouter([
   // 1. Sadece Giriş Yapmamışlara Açık Alan (Public)
@@ -106,7 +107,7 @@ export const router = createBrowserRouter([
                   },
                   {
                     path: "close",
-                    element: <NotFoundPage />,
+                    element: <TimeAccountClosePage />,
                   },
                 ],
               },

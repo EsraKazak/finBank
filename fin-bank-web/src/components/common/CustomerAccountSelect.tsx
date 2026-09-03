@@ -59,29 +59,33 @@ export const CustomerAccountSelect: React.FC<CustomerAccountSelectProps> = ({
 
     try {
       setLoading(true);
+
+      // Tek bir tip varsa direkt gönder, birden fazla ise virgülle ayırarak ilet
+      const accountTypeParam =
+        allowedProductTypes && allowedProductTypes.length === 1
+          ? allowedProductTypes[0]
+          : allowedProductTypes?.join(",");
+
       const res = await api.get<{ success: boolean; data: Account[] }>(
         `/accounts/customer/${customerId}`,
+        {
+          params: {
+            ...(accountTypeParam && { accountType: accountTypeParam }),
+          },
+        },
       );
 
-      const allAccounts = res.data.data || [];
+      let fetchedAccounts = res.data.data || [];
 
-      // İzin verilen ürün tiplerine göre dinamik filtreleme
-      let filteredAccounts = allAccounts.filter((a) =>
-        a.product?.type ? allowedProductTypes.includes(a.product.type) : true,
-      );
-
+      // Sadece kapalı hesap filtresi (istenirse bu da backend'e taşınabilir)
       if (!includeClosed) {
-        filteredAccounts = filteredAccounts.filter(
-          (a) => a.status !== "CLOSED",
-        );
+        fetchedAccounts = fetchedAccounts.filter((a) => a.status !== "CLOSED");
       }
 
-      setAccounts(filteredAccounts);
+      setAccounts(fetchedAccounts);
 
       if (selectedAccountId && !value) {
-        const matched = filteredAccounts.find(
-          (a) => a.id === selectedAccountId,
-        );
+        const matched = fetchedAccounts.find((a) => a.id === selectedAccountId);
         if (matched) onChange(matched);
       }
     } catch (err) {

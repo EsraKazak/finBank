@@ -248,7 +248,7 @@ export const RolePermissionMatrix: React.FC = () => {
       },
       {
         headerName: "GÜNCEL ROLÜ",
-        field: "userRole",
+        field: "userRole.role.name",
         flex: 1.5,
         cellRenderer: (params: any) => {
           const u = params.data as IAdminUserItem;
@@ -312,6 +312,7 @@ export const RolePermissionMatrix: React.FC = () => {
       {
         headerName: "İSTİSNAİ YETKİLER",
         field: "userPermissions",
+        cellDataType: false,
         flex: 1.2,
         cellRenderer: (params: any) => {
           const count = params.value?.length || 0;
