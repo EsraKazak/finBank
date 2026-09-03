@@ -28,6 +28,7 @@ export const openAccount = async (dto: OpenAccountDTO) => {
     name,
     initialAmount = 0,
     sourceAccountId,
+    targetAccountId,
     interestRate,
     renewalType,
     maturityDays,
@@ -202,6 +203,10 @@ export const openAccount = async (dto: OpenAccountDTO) => {
         maturityStart: finalMaturityStart,
         maturityEnd: finalMaturityEnd,
         maturityDays: finalMaturityDays,
+        targetAccountId:
+          finalRenewalType !== "PRINCIPAL_AND_INTEREST"
+            ? (targetAccountId ?? null)
+            : null,
       },
       include: {
         product: true,
@@ -439,6 +444,10 @@ export const updateTimeAccount = async (data: {
     maturityEnd: data.maturityEnd,
     interestRate: finalInterestRate,
     renewalType: data.renewalType,
+    targetAccountId:
+      data.renewalType === "PRINCIPAL_AND_INTEREST"
+        ? null
+        : (data.targetAccountId ?? null),
     updatedById: data.userId,
   });
 };

@@ -41,6 +41,7 @@ export interface Account {
   maturityEnd?: string | null;
   product?: Product;
   currency?: Currency;
+  targetAccountId?: number | null;
 }
 
 export interface CreateTimeAccountDTO {

@@ -113,7 +113,9 @@ export const getCustomerAccountsHandler = async (
 
     const accounts = await accountService.getCustomerAccounts(
       customerId,
-      accountType === "DEMAND" || accountType === "TIME" ? accountType : undefined,
+      accountType === "DEMAND" || accountType === "TIME"
+        ? accountType
+        : undefined,
     );
     return res.status(200).json({ success: true, data: accounts });
   } catch (error: any) {
@@ -251,11 +253,28 @@ export const updateTimeDepositAccountController = async (
   try {
     const accountId = Number(req.params.id);
     const userId = (req as any).user?.id || (req as any).user?.userId;
+
+    const {
+      maturityDays,
+      maturityStart,
+      maturityEnd,
+      renewalType,
+      targetAccountId,
+    } = req.body;
+
     const result = await accountService.updateTimeAccount({
       accountId,
-      ...req.body,
+      maturityDays:
+        maturityDays !== undefined && maturityDays !== ""
+          ? Number(maturityDays)
+          : undefined,
+      maturityStart: maturityStart ? new Date(maturityStart) : undefined,
+      maturityEnd: maturityEnd ? new Date(maturityEnd) : undefined,
+      renewalType,
+      targetAccountId: targetAccountId ? Number(targetAccountId) : null,
       userId,
     });
+
     return res.json({
       success: true,
       data: result,
@@ -283,6 +302,7 @@ export const getAccountByIdHandler = async (req: Request, res: Response) => {
         currency: true,
         branch: true,
         customer: true,
+        targetAccount: true, // <-- EKLENDİ: Hedef vadesiz hesap detayları dönsün
       },
     });
 

@@ -245,43 +245,47 @@ model Customer {
 }
 
 model Account {
-  id            Int           @id @default(autoincrement())
-  accountNumber Int
-  iban          String        @unique @db.VarChar(34)
-  name          String        @db.VarChar(100)
-  balance       Decimal       @default(0.00) @db.Decimal(15, 2)
-  status        AccountStatus @default(ACTIVE)
+  id                Int           @id @default(autoincrement())
+  accountNumber     Int
+  iban              String        @unique @db.VarChar(34)
+  name              String        @db.VarChar(100)
+  balance           Decimal       @default(0.00) @db.Decimal(15, 2)
+  status            AccountStatus @default(ACTIVE)
 
-  customerId    Int
-  customer      Customer      @relation(fields: [customerId], references: [id])
+  customerId        Int
+  customer          Customer      @relation(fields: [customerId], references: [id])
 
-  branchId      Int
-  branch        Branch        @relation(fields: [branchId], references: [id])
+  branchId          Int
+  branch            Branch        @relation(fields: [branchId], references: [id])
 
-  productId     Int
-  product       Product       @relation(fields: [productId], references: [id])
+  productId         Int
+  product           Product       @relation(fields: [productId], references: [id])
 
- currencyId    Int
-currency      Currency      @relation(fields: [currencyId], references: [id])
-accountingRecords AccountingRecord[]
+  currencyId        Int
+  currency          Currency      @relation(fields: [currencyId], references: [id])
+  accountingRecords AccountingRecord[]
 
-  interestRate  Decimal?      @db.Decimal(5, 2)
-  renewalType   RenewalType?
-  maturityStart DateTime?
-  maturityEnd   DateTime?
-  maturityDays  Int?
+  interestRate      Decimal?      @db.Decimal(5, 2)
+  renewalType       RenewalType?
+  maturityStart     DateTime?
+  maturityEnd       DateTime?
+  maturityDays      Int?
 
-  createdAt     DateTime      @default(now())
-  createdById   String
-  createdBy     User          @relation("AccountCreatedBy", fields: [createdById], references: [id])
-  updatedAt     DateTime      @updatedAt
-  updatedById   String?
-  updatedBy     User?         @relation("AccountUpdatedBy", fields: [updatedById], references: [id])
+  // Vade sonu aktarım hedef hesabı (Self-relation)
+  targetAccountId   Int?
+  targetAccount     Account?      @relation("TargetAccountRelation", fields: [targetAccountId], references: [id])
+  sourceForAccounts Account[]     @relation("TargetAccountRelation")
+
+  createdAt         DateTime      @default(now())
+  createdById       String
+  createdBy         User          @relation("AccountCreatedBy", fields: [createdById], references: [id])
+  updatedAt         DateTime      @updatedAt
+  updatedById       String?
+  updatedBy         User?         @relation("AccountUpdatedBy", fields: [updatedById], references: [id])
 
   @@unique([customerId, accountNumber])
   @@map("accounts")
 }
-
 enum TransactionType {
   DEPOSIT     // Para Yatırma
   WITHDRAWAL  // Para Çekme

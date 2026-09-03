@@ -90,6 +90,7 @@ export const listAccountsByCustomerId = async (
       product: true,
       currency: true,
       branch: true,
+      targetAccount: true,
     },
     orderBy: { accountNumber: "asc" },
   });
@@ -172,6 +173,7 @@ export const updateTimeDepositAccount = async (
     interestRate?: number;
     renewalType?: RenewalType;
     updatedById: string;
+    targetAccountId?: number | null;
   },
 ) => {
   return prisma.account.update({
@@ -182,6 +184,7 @@ export const updateTimeDepositAccount = async (
       currency: true,
       branch: true,
       customer: true,
+      targetAccount: true,
     },
   });
 };

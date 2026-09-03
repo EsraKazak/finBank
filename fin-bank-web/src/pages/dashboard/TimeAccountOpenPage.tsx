@@ -1,5 +1,8 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
+import moment from "moment";
+import { z } from "zod";
+import { useFormik } from "formik";
 import {
   Box,
   Card,
@@ -15,28 +18,78 @@ import {
   MenuItem,
   Paper,
   Divider,
+  FormHelperText,
+  InputAdornment,
+  Tooltip,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
+import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
+import { AdapterMoment } from "@mui/x-date-pickers/AdapterMoment";
+import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
+import PrintIcon from "@mui/icons-material/Print";
+import AddIcon from "@mui/icons-material/Add";
 import api from "../../services/api";
 import type { Customer } from "../../types/customer.types";
 import type {
   Product,
   Currency,
   ProductCurrency,
-  RenewalType,
 } from "../../types/account.types";
 import { CustomerSearchCard } from "../../components/common/CustomerSearchCard";
 import { CustomerAccountSelect } from "../../components/common/CustomerAccountSelect";
 import { ReceiptPrintModal } from "../../components/ReceiptPrintModal";
 import type { IReceiptData } from "../../components/ReceiptPrintModal";
+import {
+  isNonWorkingDay,
+  getNextBusinessDay,
+  getAvailableValors,
+} from "../../utils/dateUtils";
 
-const formatDateForInput = (date: Date): string => {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-};
+// --- ZOD ŞEMASI ---
+const timeAccountSchema = z
+  .object({
+    accountName: z.string().min(3, "Hesap adı en az 3 karakter olmalıdır."),
+    currencyId: z.number().min(1, "Lütfen para birimi seçiniz."),
+    maturityDays: z.coerce
+      .number()
+      .min(1, "Vade en az 1 gün olmalıdır.")
+      .max(765, "Vade en fazla 765 gün olabilir."),
+    initialAmount: z
+      .string()
+      .min(1, "Açılış tutarı girilmelidir.")
+      .refine(
+        (val) => /^\d+(\.\d{1,2})?$/.test(val),
+        "Tutar noktadan sonra en fazla 2 ondalık basamak içerebilir (Örn: 1000.50)",
+      )
+      .refine((val) => Number(val) > 0, "Açılış tutarı 0'dan büyük olmalıdır."),
+    sourceAccountId: z
+      .number({ message: "Kaynak hesap zorunludur." })
+      .min(1, "Lütfen kaynak vadesiz hesap seçiniz."),
+    renewalType: z.enum(["PRINCIPAL_AND_INTEREST", "PRINCIPAL_ONLY", "CLOSE"]),
+    targetAccountId: z.number().nullable().optional(),
+  })
+  .refine(
+    (data) => {
+      if (
+        data.renewalType !== "PRINCIPAL_AND_INTEREST" &&
+        !data.targetAccountId
+      ) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message:
+        "Seçilen temdit türü için vade sonunda aktarım yapılacak hedef vadesiz hesap seçilmelidir.",
+      path: ["targetAccountId"],
+    },
+  );
+
+type TimeAccountFormValues = z.infer<typeof timeAccountSchema>;
 
 export const TimeAccountOpenPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -44,41 +97,45 @@ export const TimeAccountOpenPage: React.FC = () => {
     null,
   );
 
-  // Form State'leri
-  const [accountName, setAccountName] = useState<string>("");
-  const [selectedCurrencyId, setSelectedCurrencyId] = useState<number | "">("");
-  const [initialAmount, setInitialAmount] = useState<string>("");
-  const [sourceAccountId, setSourceAccountId] = useState<number | null>(null);
-  const [targetAccountId, setTargetAccountId] = useState<number | null>(null);
+  // Valör Günleri (dateUtils)
+  const { t0Date, t1Date } = useMemo(() => getAvailableValors(), []);
 
-  // Vade & Tarih State'leri
-  const [maturityDays, setMaturityDays] = useState<number | string>(32);
-  const [startDate, setStartDate] = useState<string>(
-    formatDateForInput(new Date()),
-  );
+  // Tarih State'leri
+  const [startDate, setStartDate] = useState<string>(t0Date);
   const [endDate, setEndDate] = useState<string>(() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 32);
-    return formatDateForInput(d);
+    const rawTarget = moment(t0Date).add(32, "days");
+    return getNextBusinessDay(rawTarget).date;
   });
 
-  // Dinamik Faiz Oranı State'leri
+  // Hata Yönetimi
+  const [dateError, setDateError] = useState<string | null>(null);
+  const dateErrorTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+
+  const showTemporaryDateError = (msg: string) => {
+    if (dateErrorTimeoutRef.current) clearTimeout(dateErrorTimeoutRef.current);
+    setDateError(msg);
+    dateErrorTimeoutRef.current = setTimeout(() => {
+      setDateError(null);
+    }, 4000);
+  };
+
+  // Faiz Oranı State'leri
   const [interestRate, setInterestRate] = useState<string>("");
   const [isLoadingRate, setIsLoadingRate] = useState<boolean>(false);
   const [rateError, setRateError] = useState<string | null>(null);
 
-  const [renewalType, setRenewalType] = useState<RenewalType>(
-    "PRINCIPAL_AND_INTEREST",
-  );
-  const [weekendWarning, setWeekendWarning] = useState<string | null>(null);
-
-  // Parametre State'leri
+  // Parametreler
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [timeProductId, setTimeProductId] = useState<number | null>(null);
-  const [_rules, setRules] = useState<ProductCurrency[]>([]);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // Dekont Modalı State'leri
+  // Başarılı Açılış Sonrası Form Kilitleme State'i
+  const [isAccountCreated, setIsAccountCreated] = useState<boolean>(false);
+
+  // İsteğe Bağlı Fiş Yazdırma State'leri
+  const [autoPrintReceipt, setAutoPrintReceipt] = useState<boolean>(true);
   const [openReceiptModal, setOpenReceiptModal] = useState<boolean>(false);
   const [selectedReceipt, setSelectedReceipt] = useState<IReceiptData | null>(
     null,
@@ -88,84 +145,251 @@ export const TimeAccountOpenPage: React.FC = () => {
     message: string;
   } | null>(null);
 
-  // 1. URL'den customerId gelmişse müşteriyi çek
+  // 1. URL'den customerId gelmişse yükle
   useEffect(() => {
     const customerIdParam = searchParams.get("customerId");
     if (customerIdParam) {
-      const fetchCustomer = async () => {
-        try {
-          const res = await api.get<{ success: boolean; data: Customer[] }>(
-            "/customers",
-          );
+      api
+        .get<{ success: boolean; data: Customer[] }>("/customers")
+        .then((res) => {
           const found = (res.data.data || []).find(
             (c) => c.id === Number(customerIdParam),
           );
           if (found) setSelectedCustomer(found);
-        } catch (err) {
-          console.error("Müşteri yüklenemedi:", err);
-        }
-      };
-      fetchCustomer();
+        })
+        .catch((err) => console.error("Müşteri yüklenemedi:", err));
     }
   }, [searchParams]);
 
-  // 2. Parametreleri Yükle (Vadeli Ürün & Döviz Kuralları)
+  // 2. Parametreleri Çek
   useEffect(() => {
-    const fetchParameters = async () => {
-      try {
-        const res = await api.get<{
-          success: boolean;
-          data: {
-            products: Product[];
-            currencies: Currency[];
-            productCurrencies: ProductCurrency[];
-          };
-        }>("/accounts/parameters");
-
+    api
+      .get<{
+        success: boolean;
+        data: {
+          products: Product[];
+          currencies: Currency[];
+          productCurrencies: ProductCurrency[];
+        };
+      }>("/accounts/parameters")
+      .then((res) => {
         const timeProd = res.data.data.products.find((p) => p.type === "TIME");
         if (timeProd) setTimeProductId(timeProd.id);
-
         setCurrencies(res.data.data.currencies);
-        setRules(res.data.data.productCurrencies);
-
         if (res.data.data.currencies.length > 0) {
-          setSelectedCurrencyId(res.data.data.currencies[0].id);
+          formik.setFieldValue("currencyId", res.data.data.currencies[0].id);
         }
-      } catch (err) {
-        console.error("Parametreler alınamadı:", err);
-      }
-    };
-    fetchParameters();
+      })
+      .catch((err) => console.error("Parametreler alınamadı:", err));
   }, []);
 
-  // Müşteri / Döviz değiştikçe hesap adını güncelle
+  // FORMIK
+  const formik = useFormik<TimeAccountFormValues>({
+    initialValues: {
+      accountName: "",
+      currencyId: 0,
+      maturityDays: 32,
+      initialAmount: "",
+      sourceAccountId: 0,
+      renewalType: "PRINCIPAL_AND_INTEREST",
+      targetAccountId: null,
+    },
+    validate: (values) => {
+      const result = timeAccountSchema.safeParse(values);
+      if (!result.success) {
+        const errors: Record<string, string> = {};
+        result.error.issues.forEach((issue) => {
+          if (issue.path[0]) errors[issue.path[0].toString()] = issue.message;
+        });
+        return errors;
+      }
+      return {};
+    },
+    onSubmit: async (values) => {
+      if (!selectedCustomer || !timeProductId) return;
+
+      if (!interestRate || rateError) {
+        setNotification({
+          type: "error",
+          message: "Geçerli bir faiz oranı olmadan vadeli hesap açılamaz.",
+        });
+        return;
+      }
+
+      if (dateError) {
+        setNotification({
+          type: "error",
+          message:
+            "Lütfen hafta sonuna veya tatil gününe denk gelmeyen geçerli bir iş günü belirleyiniz.",
+        });
+        return;
+      }
+
+      try {
+        setIsSubmitting(true);
+        setNotification(null);
+
+        const res = await api.post("/accounts", {
+          customerId: selectedCustomer.id,
+          productId: timeProductId,
+          currencyId: values.currencyId,
+          name: values.accountName.trim(),
+          initialAmount: Number(values.initialAmount),
+          sourceAccountId: values.sourceAccountId,
+          targetAccountId:
+            values.renewalType !== "PRINCIPAL_AND_INTEREST"
+              ? values.targetAccountId
+              : undefined,
+          renewalType: values.renewalType,
+          maturityDays: Number(values.maturityDays),
+          maturityStart: new Date(startDate),
+          maturityEnd: new Date(endDate),
+        });
+
+        // 1. İşlem tekrarını engellemek için formu kilitle
+        setIsAccountCreated(true);
+
+        setNotification({
+          type: "success",
+          message:
+            "Vadeli hesap açılışı ve başlangıç virmanı başarıyla tamamlandı.",
+        });
+
+        // 2. Fiş Verisini Al ve İsteğe Bağlı Yazdır
+        const newAccountId = res.data.data?.id || res.data.id;
+        if (newAccountId) {
+          const receiptRes = await api.get(
+            `/accounting?accountId=${newAccountId}`,
+          );
+          if (receiptRes.data.data?.length > 0) {
+            const receipt = receiptRes.data.data[0];
+            setSelectedReceipt(receipt);
+
+            // Checkbox işaretliyse otomatik aç
+            if (autoPrintReceipt) {
+              setOpenReceiptModal(true);
+            }
+          }
+        }
+      } catch (err: any) {
+        setNotification({
+          type: "error",
+          message: err.response?.data?.message || "Vadeli hesap açılamadı.",
+        });
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+  });
+
+  // Yeni Hesap Açma Butonuna basıldığında formu ve kilitleri sıfırla
+  const handleResetForNewAccount = () => {
+    setIsAccountCreated(false);
+    setSelectedReceipt(null);
+    setNotification(null);
+    setDateError(null);
+
+    const defaultT0 = t0Date;
+    setStartDate(defaultT0);
+    const rawTarget = moment(defaultT0).add(32, "days");
+    setEndDate(getNextBusinessDay(rawTarget).date);
+
+    formik.resetForm({
+      values: {
+        accountName: selectedCustomer
+          ? `${selectedCustomer.firstName} Vadeli ${
+              currencies.find((c) => c.id === formik.values.currencyId)?.code ||
+              "TRY"
+            } Hesabı`
+          : "",
+        currencyId: formik.values.currencyId || (currencies[0]?.id ?? 0),
+        maturityDays: 32,
+        initialAmount: "",
+        sourceAccountId: 0,
+        renewalType: "PRINCIPAL_AND_INTEREST",
+        targetAccountId: null,
+      },
+    });
+  };
+
+  // Müşteri / Döviz değiştikçe otomatik hesap adını set et
   useEffect(() => {
-    if (selectedCustomer && selectedCurrencyId) {
-      const curr = currencies.find((c) => c.id === selectedCurrencyId);
+    if (selectedCustomer && formik.values.currencyId && !isAccountCreated) {
+      const curr = currencies.find((c) => c.id === formik.values.currencyId);
       if (curr) {
-        setAccountName(
+        formik.setFieldValue(
+          "accountName",
           `${selectedCustomer.firstName} Vadeli ${curr.code} Hesabı`,
         );
       }
     }
-  }, [selectedCustomer, selectedCurrencyId, currencies]);
+  }, [
+    selectedCustomer,
+    formik.values.currencyId,
+    currencies,
+    isAccountCreated,
+  ]);
 
-  // 3. Veritabanından Dinamik Faiz Oranını Çeken useEffect
+  // Vade Başlangıcı Tıklama ile Değişimi (T0 <-> T1)
+  const toggleStartDate = () => {
+    if (isAccountCreated) return;
+
+    const nextDate = startDate === t0Date ? t1Date : t0Date;
+    setStartDate(nextDate);
+
+    const days = Number(formik.values.maturityDays || 32);
+    const computedEnd = moment(nextDate).add(days, "days");
+    setEndDate(computedEnd.format("YYYY-MM-DD"));
+
+    if (isNonWorkingDay(computedEnd)) {
+      showTemporaryDateError(
+        "Vade bitiş tarihi hafta sonuna veya resmi tatile denk gelmektedir. Lütfen iş günü seçiniz.",
+      );
+    } else {
+      if (dateErrorTimeoutRef.current)
+        clearTimeout(dateErrorTimeoutRef.current);
+      setDateError(null);
+    }
+  };
+
+  // Gün kutusuna sayı girildiğinde bitiş tarihini hesapla
+  const handleDaysChange = (daysVal: string) => {
+    formik.setFieldValue("maturityDays", daysVal);
+    const numDays = Number(daysVal);
+
+    if (!isNaN(numDays) && numDays > 0) {
+      const computedEnd = moment(startDate).add(numDays, "days");
+      setEndDate(computedEnd.format("YYYY-MM-DD"));
+
+      if (isNonWorkingDay(computedEnd)) {
+        showTemporaryDateError(
+          "Seçilen gün hafta sonu veya resmi tatile denk gelmektedir. Lütfen iş günü seçiniz.",
+        );
+      } else {
+        if (dateErrorTimeoutRef.current)
+          clearTimeout(dateErrorTimeoutRef.current);
+        setDateError(null);
+      }
+    } else {
+      if (dateErrorTimeoutRef.current)
+        clearTimeout(dateErrorTimeoutRef.current);
+      setDateError(null);
+    }
+  };
+
+  // Dinamik Faiz Oranı Çekme
   useEffect(() => {
-    const days = Number(maturityDays);
-    const amount = Number(initialAmount);
+    const days = Number(formik.values.maturityDays);
+    const amount = Number(formik.values.initialAmount);
+    const currId = formik.values.currencyId;
 
-    if (selectedCurrencyId && days > 0 && amount > 0) {
+    if (currId && days > 0 && amount > 0) {
       setIsLoadingRate(true);
       setRateError(null);
 
       api
         .get(`/accounts/interest-rate-preview`, {
-          params: {
-            currencyId: selectedCurrencyId,
-            termDays: days,
-            amount: amount,
-          },
+          params: { currencyId: currId, termDays: days, amount: amount },
         })
         .then((res) => {
           setInterestRate(String(res.data.data.rate));
@@ -178,404 +402,366 @@ export const TimeAccountOpenPage: React.FC = () => {
               "Bu tutar ve vade aralığı için tanımlı faiz oranı bulunamadı.",
           );
         })
-        .finally(() => {
-          setIsLoadingRate(false);
-        });
+        .finally(() => setIsLoadingRate(false));
     } else {
       setInterestRate("");
       setRateError(null);
     }
-  }, [selectedCurrencyId, maturityDays, initialAmount]);
+  }, [
+    formik.values.currencyId,
+    formik.values.maturityDays,
+    formik.values.initialAmount,
+  ]);
 
-  // Hafta sonu kontrolü
-  const adjustToNextBusinessDay = (
-    date: Date,
-  ): { adjustedDate: Date; wasWeekend: boolean } => {
-    const d = new Date(date);
-    const day = d.getDay();
-    let wasWeekend = false;
-
-    if (day === 6) {
-      d.setDate(d.getDate() + 2);
-      wasWeekend = true;
-    } else if (day === 0) {
-      d.setDate(d.getDate() + 1);
-      wasWeekend = true;
-    }
-
-    return { adjustedDate: d, wasWeekend };
-  };
-
-  const handleDaysChange = (daysVal: string) => {
-    setMaturityDays(daysVal);
-    const numDays = Number(daysVal);
-
-    if (!isNaN(numDays) && numDays > 0 && startDate) {
-      const start = new Date(startDate);
-      start.setDate(start.getDate() + numDays);
-
-      const { adjustedDate, wasWeekend } = adjustToNextBusinessDay(start);
-      setEndDate(formatDateForInput(adjustedDate));
-
-      if (wasWeekend) {
-        setWeekendWarning(
-          "Seçilen vade sonu hafta sonuna denk geldiği için ilk iş günü olan Pazartesi'ye ötelenmiştir.",
-        );
-      } else {
-        setWeekendWarning(null);
-      }
-
-      const diffTime = adjustedDate.getTime() - new Date(startDate).getTime();
-      const actualDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      if (actualDays !== numDays) {
-        setMaturityDays(actualDays);
-      }
-    }
-  };
-
-  const handleEndDateChange = (endVal: string) => {
-    if (!endVal) return;
-
-    const rawDate = new Date(endVal);
-    const { adjustedDate, wasWeekend } = adjustToNextBusinessDay(rawDate);
-
-    setEndDate(formatDateForInput(adjustedDate));
-
-    if (wasWeekend) {
-      setWeekendWarning(
-        "Seçilen tarih hafta sonuna denk geldiği için ilk iş günü olan Pazartesi'ye ötelenmiştir.",
-      );
-    } else {
-      setWeekendWarning(null);
-    }
-
-    if (startDate) {
-      const start = new Date(startDate);
-      const diffTime = adjustedDate.getTime() - start.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      if (diffDays > 0) {
-        setMaturityDays(diffDays);
-      }
-    }
-  };
-
-  // Tahmini Brüt Getiri
+  // Tahmini Getiri
   const estimatedGrossInterest = useMemo(() => {
-    const principal = Number(initialAmount || 0);
+    const principal = Number(formik.values.initialAmount || 0);
     const rate = Number(interestRate || 0);
-    const days = Number(maturityDays || 0);
+    const days = Number(formik.values.maturityDays || 0);
     if (principal > 0 && rate > 0 && days > 0) {
       return (principal * rate * days) / 36500;
     }
     return 0;
-  }, [initialAmount, interestRate, maturityDays]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedCustomer || !timeProductId || !selectedCurrencyId) return;
-
-    if (!sourceAccountId) {
-      setNotification({
-        type: "error",
-        message:
-          "Lütfen vadeli hesaba aktarılacak tutarın çekileceği kaynak vadesiz hesabı seçiniz.",
-      });
-      return;
-    }
-
-    if (renewalType !== "PRINCIPAL_AND_INTEREST" && !targetAccountId) {
-      setNotification({
-        type: "error",
-        message:
-          "Seçtiğiniz temdit türü için vade sonunda paranın aktarılacağı hedef vadesiz hesabı seçmelisiniz.",
-      });
-      return;
-    }
-
-    if (!interestRate || rateError) {
-      setNotification({
-        type: "error",
-        message: "Geçerli bir faiz oranı olmadan vadeli hesap açılamaz.",
-      });
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      setNotification(null);
-
-      const res = await api.post("/accounts", {
-        customerId: selectedCustomer.id,
-        productId: timeProductId,
-        currencyId: selectedCurrencyId,
-        name: accountName.trim(),
-        initialAmount: Number(initialAmount),
-        sourceAccountId: sourceAccountId,
-        targetAccountId:
-          renewalType !== "PRINCIPAL_AND_INTEREST"
-            ? targetAccountId
-            : undefined,
-        renewalType: renewalType,
-        maturityDays: Number(maturityDays),
-        maturityStart: new Date(startDate),
-        maturityEnd: new Date(endDate),
-      });
-
-      setNotification({
-        type: "success",
-        message:
-          "Vadeli hesap açılışı ve başlangıç virmanı başarıyla tamamlandı.",
-      });
-
-      const newAccountId = res.data.data?.id || res.data.id;
-      if (newAccountId) {
-        const receiptRes = await api.get(
-          `/accounting?accountId=${newAccountId}`,
-        );
-        if (receiptRes.data.data?.length > 0) {
-          setSelectedReceipt(receiptRes.data.data[0]);
-          setOpenReceiptModal(true);
-        }
-      }
-
-      setInitialAmount("");
-    } catch (err: any) {
-      setNotification({
-        type: "error",
-        message: err.response?.data?.message || "Vadeli hesap açılamadı.",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  }, [formik.values.initialAmount, interestRate, formik.values.maturityDays]);
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
-        Vadeli Hesap Açılış İşlemleri
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Müşterinin vadesiz hesabından kaynak tutar aktararak dinamik faiz ve
-        vade kurallarıyla vadeli mevduat hesabı tanımlayabilirsiniz.
-      </Typography>
+    <LocalizationProvider dateAdapter={AdapterMoment}>
+      <Box sx={{ p: 3 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+          Vadeli Hesap Açılış İşlemleri
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+          Müşterinin vadesiz hesabından kaynak tutar aktararak dinamik faiz ve
+          vade kurallarıyla vadeli mevduat hesabı tanımlayabilirsiniz.
+        </Typography>
 
-      {notification && (
-        <Alert
-          severity={notification.type}
-          sx={{ mb: 3 }}
-          onClose={() => setNotification(null)}
-        >
-          {notification.message}
-        </Alert>
-      )}
+        {/* BİLDİRİM VE HIZLI FİŞ YAZDIRMA BUTONU */}
+        {notification && (
+          <Alert
+            severity={notification.type}
+            sx={{ mb: 3 }}
+            onClose={() => setNotification(null)}
+            action={
+              notification.type === "success" && selectedReceipt ? (
+                <Button
+                  color="inherit"
+                  size="small"
+                  startIcon={<PrintIcon />}
+                  onClick={() => setOpenReceiptModal(true)}
+                  sx={{ fontWeight: 700 }}
+                >
+                  Fişi Yazdır
+                </Button>
+              ) : undefined
+            }
+          >
+            {notification.message}
+          </Alert>
+        )}
 
-      {/* 1. MÜŞTERİ SEÇİM KARTI */}
-      <CustomerSearchCard
-        selectedCustomer={selectedCustomer}
-        onSelectCustomer={(c) => {
-          setSelectedCustomer(c);
-          setSourceAccountId(null);
-          setTargetAccountId(null);
-        }}
-      />
-
-      {/* 2. VADELİ AÇILIŞ FORMU */}
-      {selectedCustomer ? (
-        <Card
-          sx={{
-            mt: 3,
-            borderRadius: 3,
-            boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+        {/* 1. MÜŞTERİ SEÇİM KARTI */}
+        <CustomerSearchCard
+          selectedCustomer={selectedCustomer}
+          onSelectCustomer={(c) => {
+            setSelectedCustomer(c);
+            setIsAccountCreated(false);
+            formik.setFieldValue("sourceAccountId", 0);
+            formik.setFieldValue("targetAccountId", null);
           }}
-        >
-          <CardContent sx={{ p: 4 }}>
-            <form onSubmit={handleSubmit}>
-              <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                {/* 1. SATIR: HESAP ADI & DÖVİZ */}
-                <Box
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns: "2fr 1fr",
-                    gap: 2,
-                  }}
-                >
-                  <TextField
-                    label="Hesap Adı / Tanımı"
-                    value={accountName}
-                    onChange={(e) => setAccountName(e.target.value)}
-                    required
-                    fullWidth
-                    size="small"
-                  />
+        />
 
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Para Birimi</InputLabel>
-                    <Select
-                      value={selectedCurrencyId}
-                      label="Para Birimi"
-                      onChange={(e) => {
-                        setSelectedCurrencyId(Number(e.target.value));
-                        setSourceAccountId(null);
-                        setTargetAccountId(null);
-                      }}
-                      required
-                    >
-                      {currencies.map((c) => (
-                        <MenuItem key={c.id} value={c.id}>
-                          {c.code} — {c.name}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Box>
-
-                {/* 2. SATIR: VADE GÜNÜ & TARİHLER */}
-                <Box
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr",
-                    gap: 2,
-                  }}
-                >
-                  <TextField
-                    label="Vade Süresi (Gün)"
-                    type="number"
-                    value={maturityDays}
-                    onChange={(e) => handleDaysChange(e.target.value)}
-                    required
-                    fullWidth
-                    size="small"
-                    slotProps={{ htmlInput: { min: 1, max: 765 } }}
-                  />
-
-                  <TextField
-                    label="Vade Başlangıç Tarihi"
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => {
-                      setStartDate(e.target.value);
-                      handleDaysChange(String(maturityDays));
+        {/* 2. VADELİ AÇILIŞ FORMU */}
+        {selectedCustomer ? (
+          <Card
+            sx={{
+              mt: 3,
+              borderRadius: 3,
+              boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+            }}
+          >
+            <CardContent sx={{ p: 4 }}>
+              <form onSubmit={formik.handleSubmit}>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  {/* 1. SATIR: HESAP ADI & DÖVİZ */}
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: "2fr 1fr",
+                      gap: 2,
                     }}
-                    required
-                    fullWidth
-                    size="small"
-                    slotProps={{ inputLabel: { shrink: true } }}
-                  />
+                  >
+                    <TextField
+                      label="Hesap Adı / Tanımı"
+                      name="accountName"
+                      disabled={isAccountCreated}
+                      value={formik.values.accountName}
+                      onChange={formik.handleChange}
+                      onBlur={formik.handleBlur}
+                      error={
+                        formik.touched.accountName &&
+                        Boolean(formik.errors.accountName)
+                      }
+                      helperText={
+                        formik.touched.accountName && formik.errors.accountName
+                      }
+                      fullWidth
+                      size="small"
+                    />
 
-                  <TextField
-                    label="Vade Bitiş Tarihi"
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => handleEndDateChange(e.target.value)}
-                    required
-                    fullWidth
-                    size="small"
-                    slotProps={{ inputLabel: { shrink: true } }}
-                  />
-                </Box>
-
-                {weekendWarning && (
-                  <Alert severity="warning" sx={{ py: 0.5 }}>
-                    {weekendWarning}
-                  </Alert>
-                )}
-
-                {/* 3. SATIR: TUTAR, KİLİTLİ FAİZ ORANI & TEMDİT */}
-                <Box
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns: "1.2fr 1fr 1.5fr",
-                    gap: 2,
-                  }}
-                >
-                  <TextField
-                    label="Açılış Tutarı (Anapara)"
-                    type="number"
-                    value={initialAmount}
-                    onChange={(e) => setInitialAmount(e.target.value)}
-                    required
-                    fullWidth
-                    size="small"
-                    slotProps={{ htmlInput: { min: 0.01, step: "0.01" } }}
-                  />
-
-                  <TextField
-                    label="Faiz Oranı (%)"
-                    value={
-                      isLoadingRate
-                        ? "Hesaplanıyor..."
-                        : interestRate
-                          ? `%${interestRate}`
-                          : "Oran Yok"
-                    }
-                    disabled
-                    error={!!rateError}
-                    helperText={
-                      rateError ||
-                      "Sistem tarafından tablodan otomatik getirilir."
-                    }
-                    fullWidth
-                    size="small"
-                  />
-
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Temdit Türü</InputLabel>
-                    <Select
-                      value={renewalType}
-                      label="Temdit Türü"
-                      onChange={(e) =>
-                        setRenewalType(e.target.value as RenewalType)
+                    <FormControl
+                      fullWidth
+                      size="small"
+                      disabled={isAccountCreated}
+                      error={
+                        formik.touched.currencyId &&
+                        Boolean(formik.errors.currencyId)
                       }
                     >
-                      <MenuItem value="PRINCIPAL_AND_INTEREST">
-                        Anapara + Faiz Yenilensin
-                      </MenuItem>
-                      <MenuItem value="PRINCIPAL_ONLY">
-                        Sadece Anapara Yenilensin (Faiz Aktar)
-                      </MenuItem>
-                      <MenuItem value="CLOSE">
-                        Vade Sonunda Otomatik Kapansın
-                      </MenuItem>
-                    </Select>
-                  </FormControl>
-                </Box>
+                      <InputLabel>Para Birimi</InputLabel>
+                      <Select
+                        name="currencyId"
+                        value={formik.values.currencyId || ""}
+                        label="Para Birimi"
+                        onChange={(e) => {
+                          formik.setFieldValue(
+                            "currencyId",
+                            Number(e.target.value),
+                          );
+                          formik.setFieldValue("sourceAccountId", 0);
+                          formik.setFieldValue("targetAccountId", null);
+                        }}
+                      >
+                        {currencies.map((c) => (
+                          <MenuItem key={c.id} value={c.id}>
+                            {c.code} — {c.name}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                      {formik.touched.currencyId &&
+                        formik.errors.currencyId && (
+                          <FormHelperText>
+                            {formik.errors.currencyId}
+                          </FormHelperText>
+                        )}
+                    </FormControl>
+                  </Box>
 
-                {/* 4. SATIR: KAYNAK VE HEDEF HESAPLAR */}
-                <Box
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      renewalType !== "PRINCIPAL_AND_INTEREST"
-                        ? "1fr 1fr"
-                        : "1fr",
-                    gap: 2,
-                  }}
-                >
-                  <Box>
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        fontWeight: 700,
-                        color: "#475569",
-                        mb: 0.5,
-                        display: "block",
+                  {/* 2. SATIR: VADE GÜNÜ, VADE BAŞLANGICI VE BİTİŞ TAKVİMİ */}
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1.3fr 1.3fr",
+                      gap: 2,
+                    }}
+                  >
+                    {/* Vade Süresi (Gün) */}
+                    <TextField
+                      label="Vade Süresi"
+                      name="maturityDays"
+                      type="number"
+                      disabled={isAccountCreated}
+                      value={formik.values.maturityDays}
+                      onChange={(e) => handleDaysChange(e.target.value)}
+                      onBlur={formik.handleBlur}
+                      error={
+                        formik.touched.maturityDays &&
+                        Boolean(formik.errors.maturityDays)
+                      }
+                      helperText={
+                        formik.touched.maturityDays &&
+                        formik.errors.maturityDays
+                      }
+                      fullWidth
+                      size="small"
+                      slotProps={{ htmlInput: { min: 1, max: 765 } }}
+                    />
+
+                    {/* Vade Başlangıcı (T0 <-> T1 Geçişi) */}
+                    <Tooltip
+                      title={
+                        isAccountCreated
+                          ? "Hesap açıldı, değiştirilemez"
+                          : "Tıklayarak ilk iş günü ile bir sonraki iş günü arasında geçiş yapabilirsiniz"
+                      }
+                    >
+                      <TextField
+                        label="Vade Başlangıç"
+                        disabled={isAccountCreated}
+                        value={`${moment(startDate).format("DD.MM.YYYY")} (${
+                          startDate === t0Date
+                            ? "İlk İş Günü"
+                            : "Sonraki İş Günü"
+                        })`}
+                        onClick={toggleStartDate}
+                        fullWidth
+                        size="small"
+                        helperText={
+                          isAccountCreated
+                            ? "İşlem tamamlandı."
+                            : "Tıklayarak valörü değiştirebilirsiniz."
+                        }
+                        slotProps={{
+                          input: {
+                            readOnly: true,
+                            sx: {
+                              cursor: isAccountCreated ? "default" : "pointer",
+                              bgcolor: "#f8fafc",
+                            },
+                            endAdornment: !isAccountCreated ? (
+                              <InputAdornment position="end">
+                                <SwapHorizIcon
+                                  color="primary"
+                                  sx={{ cursor: "pointer" }}
+                                />
+                              </InputAdornment>
+                            ) : undefined,
+                          },
+                        }}
+                      />
+                    </Tooltip>
+
+                    {/* Vade Bitiş Tarihi (MUI DatePicker) */}
+                    <DatePicker
+                      label="Vade Bitiş Tarihi"
+                      disabled={isAccountCreated}
+                      value={moment(endDate, "YYYY-MM-DD")}
+                      format="DD.MM.YYYY"
+                      shouldDisableDate={(day) => isNonWorkingDay(day)}
+                      minDate={moment(startDate, "YYYY-MM-DD").add(1, "days")}
+                      onChange={(newVal) => {
+                        if (newVal && newVal.isValid()) {
+                          const chosen = newVal.format("YYYY-MM-DD");
+                          setEndDate(chosen);
+
+                          if (dateErrorTimeoutRef.current)
+                            clearTimeout(dateErrorTimeoutRef.current);
+                          setDateError(null);
+
+                          const diff = newVal.diff(
+                            moment(startDate, "YYYY-MM-DD"),
+                            "days",
+                          );
+                          formik.setFieldValue(
+                            "maturityDays",
+                            diff > 0 ? diff : 1,
+                          );
+                        }
                       }}
-                    >
-                      Tutarın Çekileceği Kaynak Vadesiz Hesap:
-                    </Typography>
-                    <CustomerAccountSelect
-                      customerId={selectedCustomer.id}
-                      selectedAccountId={sourceAccountId}
-                      filterOnlyActive={true}
-                      includeClosed={false}
-                      onChange={(acc) =>
-                        setSourceAccountId(acc ? acc.id : null)
-                      }
-                      label="Kaynak Vadesiz Hesabı Seçiniz"
+                      slotProps={{
+                        textField: {
+                          size: "small",
+                          fullWidth: true,
+                          error: Boolean(dateError),
+                          helperText:
+                            dateError || "Tatil ve hafta sonları seçilemez.",
+                        },
+                      }}
                     />
                   </Box>
 
-                  {renewalType !== "PRINCIPAL_AND_INTEREST" && (
+                  {/* Süreli Hata Alanı */}
+                  {dateError && (
+                    <Alert
+                      severity="error"
+                      sx={{ py: 0.5 }}
+                      onClose={() => {
+                        if (dateErrorTimeoutRef.current)
+                          clearTimeout(dateErrorTimeoutRef.current);
+                        setDateError(null);
+                      }}
+                    >
+                      {dateError}
+                    </Alert>
+                  )}
+
+                  {/* 3. SATIR: TUTAR (2 ONDALIK KONTROLÜ), KİLİTLİ FAİZ ORANI & TEMDİT */}
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: "1.2fr 1fr 1.5fr",
+                      gap: 2,
+                    }}
+                  >
+                    <TextField
+                      label="Açılış Tutarı (Anapara)"
+                      name="initialAmount"
+                      type="text"
+                      disabled={isAccountCreated}
+                      value={formik.values.initialAmount}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(",", ".");
+                        if (/^\d*\.?\d*$/.test(val)) {
+                          formik.setFieldValue("initialAmount", val);
+                        }
+                      }}
+                      onBlur={formik.handleBlur}
+                      error={
+                        formik.touched.initialAmount &&
+                        Boolean(formik.errors.initialAmount)
+                      }
+                      helperText={
+                        (formik.touched.initialAmount &&
+                          formik.errors.initialAmount) ||
+                        "Noktadan sonra en fazla 2 basamak (Örn: 5000.50)"
+                      }
+                      fullWidth
+                      size="small"
+                    />
+
+                    <TextField
+                      label="Faiz Oranı (%)"
+                      value={
+                        isLoadingRate
+                          ? "Hesaplanıyor..."
+                          : interestRate
+                            ? `%${interestRate}`
+                            : "Oran Yok"
+                      }
+                      disabled
+                      error={Boolean(rateError)}
+                      helperText={
+                        rateError || "Sistem tarafından otomatik getirilir."
+                      }
+                      fullWidth
+                      size="small"
+                    />
+
+                    <FormControl
+                      fullWidth
+                      size="small"
+                      disabled={isAccountCreated}
+                    >
+                      <InputLabel>Temdit Türü</InputLabel>
+                      <Select
+                        name="renewalType"
+                        value={formik.values.renewalType}
+                        label="Temdit Türü"
+                        onChange={formik.handleChange}
+                      >
+                        <MenuItem value="PRINCIPAL_AND_INTEREST">
+                          Anapara + Faiz Yenilensin
+                        </MenuItem>
+                        <MenuItem value="PRINCIPAL_ONLY">
+                          Sadece Anapara Yenilensin (Faiz Aktar)
+                        </MenuItem>
+                        <MenuItem value="CLOSE">
+                          Vade Sonunda Otomatik Kapansın
+                        </MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Box>
+
+                  {/* 4. SATIR: KAYNAK VE HEDEF HESAPLAR */}
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns:
+                        formik.values.renewalType !== "PRINCIPAL_AND_INTEREST"
+                          ? "1fr 1fr"
+                          : "1fr",
+                      gap: 2,
+                    }}
+                  >
                     <Box>
                       <Typography
                         variant="caption"
@@ -586,111 +772,226 @@ export const TimeAccountOpenPage: React.FC = () => {
                           display: "block",
                         }}
                       >
-                        Vade Sonu Paranın Aktarılacağı Hedef Vadesiz Hesap:
+                        Tutarın Çekileceği Kaynak Vadesiz Hesap:
                       </Typography>
                       <CustomerAccountSelect
                         customerId={selectedCustomer.id}
-                        selectedAccountId={targetAccountId}
+                        selectedAccountId={
+                          formik.values.sourceAccountId || null
+                        }
                         filterOnlyActive={true}
                         includeClosed={false}
-                        onChange={(acc) =>
-                          setTargetAccountId(acc ? acc.id : null)
-                        }
-                        label="Hedef Vadesiz Hesabı Seçiniz"
+                        disabled={isAccountCreated}
+                        allowedProductTypes={["DEMAND"]}
+                        onChange={(acc) => {
+                          if (!isAccountCreated) {
+                            formik.setFieldValue(
+                              "sourceAccountId",
+                              acc ? acc.id : 0,
+                            );
+                          }
+                        }}
+                        label="Kaynak Vadesiz Hesabı Seçiniz"
                       />
+                      {formik.touched.sourceAccountId &&
+                        formik.errors.sourceAccountId && (
+                          <Typography
+                            variant="caption"
+                            color="error"
+                            sx={{ mt: 0.5 }}
+                          >
+                            {formik.errors.sourceAccountId}
+                          </Typography>
+                        )}
                     </Box>
-                  )}
-                </Box>
 
-                {/* 5. GETİRİ VE BİLGİ KARTI */}
-                <Paper
-                  variant="outlined"
-                  sx={{
-                    p: 2.5,
-                    bgcolor: "#f8fafc",
-                    borderRadius: 2.5,
-                    border: "1px solid #e2e8f0",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-                    <TrendingUpIcon color="success" sx={{ fontSize: 32 }} />
-                    <Box>
-                      <Typography variant="caption" color="text.secondary">
-                        Vade Sonu Tahmini Brüt Faiz Getirisi:
-                      </Typography>
-                      <Typography
-                        variant="h6"
-                        sx={{ fontWeight: 800, color: "#16a34a" }}
-                      >
-                        {estimatedGrossInterest.toLocaleString("tr-TR", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}{" "}
-                        {currencies.find((c) => c.id === selectedCurrencyId)
-                          ?.code || "TRY"}
-                      </Typography>
-                    </Box>
+                    {formik.values.renewalType !== "PRINCIPAL_AND_INTEREST" && (
+                      <Box>
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            fontWeight: 700,
+                            color: "#475569",
+                            mb: 0.5,
+                            display: "block",
+                          }}
+                        >
+                          Vade Sonu Paranın Aktarılacağı Hedef Vadesiz Hesap:
+                        </Typography>
+                        <CustomerAccountSelect
+                          customerId={selectedCustomer.id}
+                          selectedAccountId={formik.values.targetAccountId}
+                          filterOnlyActive={true}
+                          includeClosed={false}
+                          disabled={isAccountCreated}
+                          allowedProductTypes={["DEMAND"]}
+                          onChange={(acc) => {
+                            if (!isAccountCreated) {
+                              formik.setFieldValue(
+                                "targetAccountId",
+                                acc ? acc.id : null,
+                              );
+                            }
+                          }}
+                          label="Hedef Vadesiz Hesabı Seçiniz"
+                        />
+                        {formik.touched.targetAccountId &&
+                          formik.errors.targetAccountId && (
+                            <Typography
+                              variant="caption"
+                              color="error"
+                              sx={{ mt: 0.5 }}
+                            >
+                              {formik.errors.targetAccountId}
+                            </Typography>
+                          )}
+                      </Box>
+                    )}
                   </Box>
 
-                  <Typography
-                    variant="caption"
-                    sx={{ color: "#64748b", textAlign: "right" }}
-                  >
-                    Vade: <strong>{startDate}</strong> ➔{" "}
-                    <strong>{endDate}</strong> ({maturityDays} Gün)
-                  </Typography>
-                </Paper>
-
-                <Divider />
-
-                {/* ONAY BUTONU */}
-                <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    startIcon={<AccessTimeIcon />}
-                    disabled={
-                      isSubmitting ||
-                      isLoadingRate ||
-                      !interestRate ||
-                      Boolean(rateError)
-                    }
+                  {/* 5. GETİRİ VE BİLGİ KARTI */}
+                  <Paper
+                    variant="outlined"
                     sx={{
-                      borderRadius: 2,
-                      px: 4,
-                      py: 1.2,
-                      textTransform: "none",
-                      fontWeight: 700,
-                      fontSize: "0.95rem",
+                      p: 2.5,
+                      bgcolor: "#f8fafc",
+                      borderRadius: 2.5,
+                      border: "1px solid #e2e8f0",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
                     }}
                   >
-                    {isSubmitting ? (
-                      <CircularProgress size={24} color="inherit" />
-                    ) : (
-                      "Vadeli Hesabı Aç & Virmanı Tamamla"
-                    )}
-                  </Button>
-                </Box>
-              </Box>
-            </form>
-          </CardContent>
-        </Card>
-      ) : (
-        <Alert severity="info" sx={{ mt: 2 }}>
-          Vadeli hesap açabilmek için lütfen yukarıdaki arama alanından işlem
-          yapılacak müşteriyi çağırınız.
-        </Alert>
-      )}
+                    <Box
+                      sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
+                    >
+                      <TrendingUpIcon color="success" sx={{ fontSize: 32 }} />
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">
+                          Vade Sonu Tahmini Brüt Faiz Getirisi:
+                        </Typography>
+                        <Typography
+                          variant="h6"
+                          sx={{ fontWeight: 800, color: "#16a34a" }}
+                        >
+                          {estimatedGrossInterest.toLocaleString("tr-TR", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}{" "}
+                          {currencies.find(
+                            (c) => c.id === formik.values.currencyId,
+                          )?.code || "TRY"}
+                        </Typography>
+                      </Box>
+                    </Box>
 
-      {/* MUHASEBE FİŞİ YAZDIRMA MODALI */}
-      <ReceiptPrintModal
-        open={openReceiptModal}
-        onClose={() => setOpenReceiptModal(false)}
-        data={selectedReceipt}
-      />
-    </Box>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "#64748b", textAlign: "right" }}
+                    >
+                      Vade:{" "}
+                      <strong>{moment(startDate).format("DD.MM.YYYY")}</strong>{" "}
+                      ➔ <strong>{moment(endDate).format("DD.MM.YYYY")}</strong>{" "}
+                      ({formik.values.maturityDays} Gün)
+                    </Typography>
+                  </Paper>
+
+                  <Divider />
+
+                  {/* ALT BUTON VE FİŞ YAZDIRMA TERCİHİ ALANI */}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    {/* İsteğe Bağlı Fiş Checkbox'ı */}
+                    <FormControlLabel
+                      control={
+                        <Checkbox
+                          checked={autoPrintReceipt}
+                          onChange={(e) =>
+                            setAutoPrintReceipt(e.target.checked)
+                          }
+                          color="primary"
+                          disabled={isAccountCreated}
+                        />
+                      }
+                      label={
+                        <Typography variant="body2" sx={{ color: "#475569" }}>
+                          İşlem tamamlandığında muhasebe fişini otomatik ekrana
+                          getir
+                        </Typography>
+                      }
+                    />
+
+                    {/* Aksiyon Butonları */}
+                    <Box sx={{ display: "flex", gap: 2 }}>
+                      {isAccountCreated ? (
+                        <Button
+                          variant="outlined"
+                          color="primary"
+                          startIcon={<AddIcon />}
+                          onClick={handleResetForNewAccount}
+                          sx={{
+                            borderRadius: 2,
+                            px: 3,
+                            py: 1.2,
+                            textTransform: "none",
+                            fontWeight: 700,
+                          }}
+                        >
+                          Yeni Vadeli Hesap Aç
+                        </Button>
+                      ) : (
+                        <Button
+                          type="submit"
+                          variant="contained"
+                          startIcon={<AccessTimeIcon />}
+                          disabled={
+                            isSubmitting ||
+                            isLoadingRate ||
+                            !interestRate ||
+                            Boolean(rateError) ||
+                            Boolean(dateError)
+                          }
+                          sx={{
+                            borderRadius: 2,
+                            px: 4,
+                            py: 1.2,
+                            textTransform: "none",
+                            fontWeight: 700,
+                            fontSize: "0.95rem",
+                          }}
+                        >
+                          {isSubmitting ? (
+                            <CircularProgress size={24} color="inherit" />
+                          ) : (
+                            "Vadeli Hesabı Aç & Virmanı Tamamla"
+                          )}
+                        </Button>
+                      )}
+                    </Box>
+                  </Box>
+                </Box>
+              </form>
+            </CardContent>
+          </Card>
+        ) : (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Vadeli hesap açabilmek için lütfen yukarıdaki arama alanından işlem
+            yapılacak müşteriyi çağırınız.
+          </Alert>
+        )}
+
+        {/* MUHASEBE FİŞİ YAZDIRMA MODALI */}
+        <ReceiptPrintModal
+          open={openReceiptModal}
+          onClose={() => setOpenReceiptModal(false)}
+          data={selectedReceipt}
+        />
+      </Box>
+    </LocalizationProvider>
   );
 };
