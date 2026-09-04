@@ -9,6 +9,8 @@ import {
   getApplicableInterestRate,
   updateTimeDepositAccountController,
   getAccountByIdHandler,
+  withdrawFromTimeAccountHandler,
+  depositToTimeAccountHandler,
 } from "../controllers/accountController";
 import { authenticateToken } from "../middlewares/authMiddleware";
 
@@ -29,6 +31,8 @@ router.get("/customer/:customerId", getCustomerAccountsHandler);
 
 // 2. Özel PUT / POST / PATCH Rotaları
 router.put("/time-deposit/:id", updateTimeDepositAccountController); // <-- /:id'den önce tanımlanmalı
+router.post("/time-deposit/withdraw", withdrawFromTimeAccountHandler);
+router.post("/time-deposit/deposit", depositToTimeAccountHandler);
 router.patch("/:id/status", updateAccountStatusHandler);
 router.patch("/:id/name", updateAccountNameHandler);
 

@@ -25,6 +25,7 @@ export interface CustomerAccountSelectProps {
   label?: string;
   disabled?: boolean;
   includeClosed?: boolean;
+  currencyId?: number | null;
   filterOnlyActive?: boolean;
   refreshTrigger?: number;
   allowedProductTypes?: Array<"DEMAND" | "TIME" | string>;
@@ -33,6 +34,7 @@ export interface CustomerAccountSelectProps {
 export const CustomerAccountSelect: React.FC<CustomerAccountSelectProps> = ({
   customerId,
   value,
+  currencyId,
   selectedAccountId,
   excludeAccountId,
   onChange,
@@ -103,10 +105,15 @@ export const CustomerAccountSelect: React.FC<CustomerAccountSelectProps> = ({
   }, [customerId, refreshTrigger, includeClosed, productTypesKey]);
 
   const displayAccounts = useMemo(() => {
-    if (!excludeAccountId) return accounts;
-    return accounts.filter((a) => a.id !== excludeAccountId);
-  }, [accounts, excludeAccountId]);
-
+    let result = accounts;
+    if (excludeAccountId) {
+      result = result.filter((a) => a.id !== excludeAccountId);
+    }
+    if (currencyId) {
+      result = result.filter((a) => a.currencyId === currencyId); // <-- Para birimi filtrelemesi
+    }
+    return result;
+  }, [accounts, excludeAccountId, currencyId]);
   const selectedAccount = useMemo(() => {
     if (value !== undefined) return value;
     return accounts.find((a) => a.id === selectedAccountId) || null;

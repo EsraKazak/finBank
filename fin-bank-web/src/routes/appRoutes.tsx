@@ -23,6 +23,8 @@ import { TimeAccountOpenPage } from "../pages/dashboard/TimeAccountOpenPage";
 import { TimeAccountUpdatePage } from "../pages/dashboard/TimeAccountUpdatePage";
 import { CustomerAccountsPage } from "../pages/dashboard/CustomerAccountsPage";
 import { TimeAccountClosePage } from "../pages/dashboard/TimeAccountClosePage";
+import TimeAccountWithdrawPage from "../pages/dashboard/TimeAccountWithdrawPage";
+import { TimeAccountDepositPage } from "../pages/dashboard/TimeAccountDepositPage";
 
 export const router = createBrowserRouter([
   // 1. Sadece Giriş Yapmamışlara Açık Alan (Public)
@@ -93,6 +95,14 @@ export const router = createBrowserRouter([
                 path: "demand-accounts",
                 element: <DemandAccountsPage />,
               },
+              {
+                path: "time-cashier/withdraw",
+                element: <TimeAccountWithdrawPage />,
+              },
+              {
+                path: "time-cashier/deposit",
+                element: <TimeAccountDepositPage />,
+              },
               // Vadeli hesap işlemleri tek çatı altında
               {
                 path: "time-accounts",
@@ -108,6 +118,10 @@ export const router = createBrowserRouter([
                   {
                     path: "close",
                     element: <TimeAccountClosePage />,
+                  },
+                  {
+                    path: "withdraw",
+                    element: <TimeAccountWithdrawPage />,
                   },
                 ],
               },

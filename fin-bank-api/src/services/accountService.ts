@@ -451,3 +451,308 @@ export const updateTimeAccount = async (data: {
     updatedById: data.userId,
   });
 };
+
+interface WithdrawFromTimeAccountDTO {
+  timeAccountId: number;
+  targetType: "DEMAND" | "CASH";
+  demandAccountId?: number;
+  amount: number;
+  userId: string;
+}
+
+export const withdrawFromTimeAccount = async (
+  dto: WithdrawFromTimeAccountDTO,
+) => {
+  const { timeAccountId, targetType, demandAccountId, amount, userId } = dto;
+  const MIN_REMAINING_BALANCE = 1000;
+
+  if (amount <= 0) {
+    throw new Error("Çekilmek istenen tutar 0'dan büyük olmalıdır.");
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    // 1. Vadeli hesabı getir ve doğrula
+    const timeAccount = await tx.account.findUnique({
+      where: { id: timeAccountId },
+      include: { product: true, currency: true, branch: true },
+    });
+
+    if (!timeAccount || timeAccount.status !== "ACTIVE") {
+      throw new Error(
+        "Kaynak vadeli hesap bulunamadı veya aktif durumda değil.",
+      );
+    }
+
+    if (timeAccount.product.type !== "TIME") {
+      throw new Error("Seçilen kaynak hesap vadeli mevduat hesabı değildir.");
+    }
+
+    // 2. 1000 TL Taban Kuralı Kontrolü (Her iki çekim türünde de zorunlu)
+    const currentBalance = Number(timeAccount.balance);
+    const remainingBalance = currentBalance - amount;
+
+    if (remainingBalance < MIN_REMAINING_BALANCE) {
+      const maxWithdrawable = Math.max(
+        0,
+        currentBalance - MIN_REMAINING_BALANCE,
+      );
+      throw new Error(
+        `Vadeli hesap bakiyesi ${MIN_REMAINING_BALANCE} ${timeAccount.currency.code} altına düşemez. Bu hesaptan çekilebilecek maksimum tutar: ${maxWithdrawable.toFixed(2)} ${timeAccount.currency.code}`,
+      );
+    }
+
+    let targetAccountNumber: number | string = "GİŞE KASASI";
+    let targetDemandBalance: number | null = null;
+    let accountingDescription = "";
+    let accountingType: "TRANSFER" | "OTHER" = "OTHER";
+
+    // 3. Çekim Türüne Göre İşlemler
+    if (targetType === "DEMAND") {
+      if (!demandAccountId) {
+        throw new Error(
+          "Vadesiz hesaba aktarım için hedef hesap seçilmelidir.",
+        );
+      }
+      if (timeAccountId === demandAccountId) {
+        throw new Error(
+          "Kaynak vadeli hesap ile hedef vadesiz hesap aynı olamaz.",
+        );
+      }
+
+      const demandAccount = await tx.account.findUnique({
+        where: { id: demandAccountId },
+        include: { product: true, currency: true },
+      });
+
+      if (
+        !demandAccount ||
+        demandAccount.status !== "ACTIVE" ||
+        demandAccount.product.type !== "DEMAND"
+      ) {
+        throw new Error(
+          "Hedef vadesiz hesap bulunamadı veya aktif durumda değil.",
+        );
+      }
+
+      if (timeAccount.customerId !== demandAccount.customerId) {
+        throw new Error(
+          "Vadeli hesap ile aktarım yapılacak vadesiz hesap aynı müşteriye ait olmalıdır.",
+        );
+      }
+
+      if (timeAccount.currencyId !== demandAccount.currencyId) {
+        throw new Error(
+          `Para birimi uyumsuzluğu: Vadeli hesap (${timeAccount.currency.code}) ile vadesiz hesap (${demandAccount.currency.code}) aynı para biriminde olmalıdır.`,
+        );
+      }
+
+      // Hedef vadesiz hesaba ekle
+      const updatedDemand = await tx.account.update({
+        where: { id: demandAccountId },
+        data: { balance: { increment: amount }, updatedById: userId },
+      });
+
+      targetAccountNumber = demandAccount.accountNumber;
+      targetDemandBalance = Number(updatedDemand.balance);
+      accountingDescription = `Vadeli Ara Para Çekme (Virman): [${timeAccount.accountNumber}] -> [${demandAccount.accountNumber}] (${amount.toFixed(2)} ${timeAccount.currency.code})`;
+      accountingType = "TRANSFER";
+    } else {
+      // CASH: Kasadan elden nakit teslim
+      accountingDescription = `Vadeli Hesaptan Kasaya Nakit Çekim (Tediye): [${timeAccount.accountNumber}] (${amount.toFixed(2)} ${timeAccount.currency.code})`;
+      accountingType = "OTHER";
+    }
+
+    // 4. Vadeli hesaptan tutarı düş
+    const updatedTimeAccount = await tx.account.update({
+      where: { id: timeAccountId },
+      data: { balance: { decrement: amount }, updatedById: userId },
+    });
+
+    // 5. Muhasebe Fişi Kaydı
+    const receiptNumber = generateReceiptNumber(timeAccount.branch.code);
+    await tx.accountingRecord.create({
+      data: {
+        receiptNumber,
+        type: accountingType,
+        amount,
+        description: accountingDescription,
+        branchId: timeAccount.branchId,
+        accountId: timeAccount.id,
+        createdById: userId,
+      },
+    });
+
+    return {
+      receiptNumber,
+      amount,
+      currency: timeAccount.currency.code,
+      remainingTimeBalance: Number(updatedTimeAccount.balance),
+      demandBalance: targetDemandBalance,
+      timeAccountNumber: timeAccount.accountNumber,
+      demandAccountNumber: targetAccountNumber,
+      targetType,
+    };
+  });
+};
+
+export interface DepositToTimeAccountDTO {
+  targetAccountId: number;
+  sourceType: "DEMAND" | "TIME" | "CASH";
+  sourceAccountId?: number;
+  amount: number;
+  userId: string;
+}
+
+export const depositToTimeAccount = async (dto: DepositToTimeAccountDTO) => {
+  const { targetAccountId, sourceType, sourceAccountId, amount, userId } = dto;
+  const MIN_TIME_BALANCE = 1000;
+
+  if (amount <= 0) {
+    throw new Error("Yatırılacak tutar 0'dan büyük olmalıdır.");
+  }
+
+  return await prisma.$transaction(async (tx) => {
+    // 1. Hedef vadeli hesabı getir ve doğrula
+    const targetAccount = await tx.account.findUnique({
+      where: { id: targetAccountId },
+      include: { product: true, currency: true, branch: true },
+    });
+
+    if (!targetAccount || targetAccount.status !== "ACTIVE") {
+      throw new Error("Hedef vadeli hesap bulunamadı veya aktif değil.");
+    }
+    if (targetAccount.product.type !== "TIME") {
+      throw new Error("Hedef hesap vadeli mevduat hesabı olmalıdır.");
+    }
+
+    let sourceDescription = "";
+    let accountingType: "TRANSFER" | "OTHER" = "TRANSFER";
+
+    // 2. Kaynak Tipine Göre Bakiye ve Kural Kontrolü
+    if (sourceType === "DEMAND") {
+      if (!sourceAccountId)
+        throw new Error("Kaynak vadesiz hesap belirtilmelidir.");
+      const sourceDemand = await tx.account.findUnique({
+        where: { id: sourceAccountId },
+        include: { product: true, currency: true },
+      });
+
+      if (
+        !sourceDemand ||
+        sourceDemand.status !== "ACTIVE" ||
+        sourceDemand.product.type !== "DEMAND"
+      ) {
+        throw new Error(
+          "Geçerli ve aktif bir kaynak vadesiz hesap bulunamadı.",
+        );
+      }
+      if (sourceDemand.currencyId !== targetAccount.currencyId) {
+        throw new Error(
+          "Kaynak vadesiz hesap ile vadeli hesabın para birimi aynı olmalıdır.",
+        );
+      }
+      if (Number(sourceDemand.balance) < amount) {
+        throw new Error(
+          `Kaynak vadesiz hesapta yetersiz bakiye. Mevcut: ${Number(sourceDemand.balance).toFixed(2)} ${sourceDemand.currency.code}`,
+        );
+      }
+
+      await tx.account.update({
+        where: { id: sourceDemand.id },
+        data: { balance: { decrement: amount }, updatedById: userId },
+      });
+      sourceDescription = `[${sourceDemand.accountNumber}] Vadesiz Hesabından Virman`;
+    } else if (sourceType === "TIME") {
+      if (!sourceAccountId)
+        throw new Error("Kaynak vadeli hesap belirtilmelidir.");
+      if (sourceAccountId === targetAccountId)
+        throw new Error("Kaynak ve hedef vadeli hesap aynı olamaz.");
+
+      const sourceTime = await tx.account.findUnique({
+        where: { id: sourceAccountId },
+        include: { product: true, currency: true },
+      });
+
+      if (
+        !sourceTime ||
+        sourceTime.status !== "ACTIVE" ||
+        sourceTime.product.type !== "TIME"
+      ) {
+        throw new Error("Geçerli ve aktif bir kaynak vadeli hesap bulunamadı.");
+      }
+      if (sourceTime.currencyId !== targetAccount.currencyId) {
+        throw new Error(
+          "Kaynak vadeli hesap ile hedef vadeli hesabın para birimi aynı olmalıdır.",
+        );
+      }
+
+      // 1000 TL kuralı
+      const remainingSource = Number(sourceTime.balance) - amount;
+      if (remainingSource < MIN_TIME_BALANCE) {
+        throw new Error(
+          `Kaynak vadeli hesap bakiyesi ${MIN_TIME_BALANCE} ${sourceTime.currency.code} altına düşemez. Azami aktarılabilir tutar: ${Math.max(0, Number(sourceTime.balance) - MIN_TIME_BALANCE).toFixed(2)} ${sourceTime.currency.code}`,
+        );
+      }
+
+      await tx.account.update({
+        where: { id: sourceTime.id },
+        data: { balance: { decrement: amount }, updatedById: userId },
+      });
+      sourceDescription = `[${sourceTime.accountNumber}] Vadeli Hesabından Virman`;
+    } else if (sourceType === "CASH") {
+      accountingType = "OTHER";
+      sourceDescription = "Gişe Kasasından Nakit Tahsilat";
+    }
+
+    // 3. Dinamik Faiz Oranı Hesaplama
+    const currentBalance = Number(targetAccount.balance);
+    const newTotalBalance = currentBalance + amount;
+    const maturityDays = targetAccount.maturityDays || 30;
+
+    const rateRecord = await accountRepository.findMatchingInterestRate(
+      targetAccount.currencyId,
+      maturityDays,
+      newTotalBalance,
+    );
+
+    const newInterestRate = rateRecord
+      ? Number(rateRecord.rate)
+      : Number(targetAccount.interestRate);
+
+    // 4. Hedef Vadeli Hesabı Güncelle
+    const updatedTargetAccount = await tx.account.update({
+      where: { id: targetAccount.id },
+      data: {
+        balance: { increment: amount },
+        interestRate: newInterestRate,
+        updatedById: userId,
+      },
+      include: { currency: true },
+    });
+
+    // 5. Muhasebe Fişi Oluşturma
+    const receiptNumber = generateReceiptNumber(targetAccount.branch.code);
+    await tx.accountingRecord.create({
+      data: {
+        receiptNumber,
+        type: accountingType,
+        amount,
+        description: `Vadeliye Para Yatırma (${sourceDescription}) -> [${targetAccount.accountNumber}] (Yeni Faiz Oranı: %${newInterestRate})`,
+        branchId: targetAccount.branchId,
+        accountId: targetAccount.id,
+        createdById: userId,
+      },
+    });
+
+    return {
+      receiptNumber,
+      amount,
+      currency: targetAccount.currency.code,
+      targetAccountNumber: targetAccount.accountNumber,
+      oldBalance: currentBalance,
+      newBalance: Number(updatedTargetAccount.balance),
+      oldInterestRate: Number(targetAccount.interestRate),
+      newInterestRate,
+    };
+  });
+};

@@ -77,6 +77,10 @@ export const DashboardPage: React.FC = () => {
   const userPermissions: string[] = user?.permissions || [];
   const hasPerm = (perm: string) => userPermissions.includes(perm);
 
+  const [timeCashierMenuOpen, setTimeCashierMenuOpen] = useState(
+    location.pathname.startsWith("/dashboard/time-cashier"),
+  );
+
   // Başlık belirleme
   const getPageTitle = () => {
     const path = location.pathname;
@@ -99,6 +103,10 @@ export const DashboardPage: React.FC = () => {
       return "Vadeli Hesap İşlemleri";
     if (path === "/dashboard/time-accounts/update")
       return "Vadeli Hesap Vade & Temdit Güncelleme";
+    if (path === "/dashboard/time-accounts/withdraw")
+      return "Vadeli Gişe İşlemi (Para Çekme)";
+    if (path === "/dashboard/time-cashier/deposit")
+      return "Vadeli Gişe İşlemleri (Para Yatırma)";
 
     return "FinBank Portal";
   };
@@ -665,6 +673,152 @@ export const DashboardPage: React.FC = () => {
                     </ListItemButton>
                   </ListItem>
                 </Tooltip>
+              )}
+
+              {/* VADELİ GİŞE İŞLEMLERİ */}
+              {(hasPerm("para:cekme") ||
+                hasPerm("para:yatirma") ||
+                hasPerm("musteri:goruntule")) && (
+                <>
+                  <Tooltip
+                    title={!open ? "Vadeli Gişe İşlemleri" : ""}
+                    placement="right"
+                  >
+                    <ListItem disablePadding sx={{ mb: 0.5 }}>
+                      <ListItemButton
+                        onClick={() => {
+                          if (!open) setOpen(true);
+                          setTimeCashierMenuOpen(!timeCashierMenuOpen);
+                        }}
+                        selected={location.pathname.startsWith(
+                          "/dashboard/time-cashier",
+                        )}
+                        sx={{
+                          borderRadius: 2,
+                          justifyContent: open ? "initial" : "center",
+                          px: 2,
+                          "&.Mui-selected": {
+                            bgcolor: "#172a45",
+                            color: "#64ffda",
+                          },
+                          "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
+                        }}
+                      >
+                        <ListItemIcon
+                          sx={{
+                            color: location.pathname.startsWith(
+                              "/dashboard/time-cashier",
+                            )
+                              ? "#64ffda"
+                              : "grey.400",
+                            minWidth: open ? 40 : "auto",
+                            mr: open ? 1 : "auto",
+                          }}
+                        >
+                          <PointOfSaleOutlinedIcon />
+                        </ListItemIcon>
+                        {open && (
+                          <>
+                            <ListItemText
+                              primary={
+                                <Typography
+                                  sx={{ fontSize: "0.88rem", fontWeight: 600 }}
+                                >
+                                  Vadeli Gişe İşlemleri
+                                </Typography>
+                              }
+                            />
+                            {timeCashierMenuOpen ? (
+                              <ExpandLess
+                                sx={{ fontSize: 18, color: "grey.400" }}
+                              />
+                            ) : (
+                              <ExpandMore
+                                sx={{ fontSize: 18, color: "grey.400" }}
+                              />
+                            )}
+                          </>
+                        )}
+                      </ListItemButton>
+                    </ListItem>
+                  </Tooltip>
+
+                  {open && (
+                    <Collapse
+                      in={timeCashierMenuOpen}
+                      timeout="auto"
+                      unmountOnExit
+                    >
+                      <List component="div" disablePadding sx={{ pl: 4 }}>
+                        {/* 1. Para Çekme */}
+                        <ListItem disablePadding sx={{ mb: 0.3 }}>
+                          <ListItemButton
+                            selected={
+                              location.pathname ===
+                              "/dashboard/time-cashier/withdraw"
+                            }
+                            onClick={() =>
+                              navigate("/dashboard/time-cashier/withdraw")
+                            }
+                            sx={{
+                              borderRadius: 1.5,
+                              py: 0.6,
+                              px: 1.5,
+                              "&.Mui-selected": {
+                                bgcolor: "rgba(100, 255, 218, 0.1)",
+                                color: "#64ffda",
+                              },
+                              "&:hover": { bgcolor: "rgba(255,255,255,0.03)" },
+                            }}
+                          >
+                            <ListItemText
+                              primary={
+                                <Typography
+                                  sx={{ fontSize: "0.82rem", fontWeight: 500 }}
+                                >
+                                  Para Çekme
+                                </Typography>
+                              }
+                            />
+                          </ListItemButton>
+                        </ListItem>
+
+                        {/* 2. Para Yatırma */}
+                        <ListItem disablePadding sx={{ mb: 0.3 }}>
+                          <ListItemButton
+                            selected={
+                              location.pathname ===
+                              "/dashboard/time-cashier/deposit"
+                            }
+                            onClick={() =>
+                              navigate("/dashboard/time-cashier/deposit")
+                            }
+                            sx={{
+                              borderRadius: 1.5,
+                              py: 0.6,
+                              px: 1.5,
+                              "&.Mui-selected": {
+                                bgcolor: "rgba(100, 255, 218, 0.1)",
+                                color: "#64ffda",
+                              },
+                              "&:hover": { bgcolor: "rgba(255,255,255,0.03)" },
+                            }}
+                          >
+                            <ListItemText
+                              primary={
+                                <Typography
+                                  sx={{ fontSize: "0.82rem", fontWeight: 500 }}
+                                >
+                                  Para Yatırma
+                                </Typography>
+                              }
+                            />
+                          </ListItemButton>
+                        </ListItem>
+                      </List>
+                    </Collapse>
+                  )}
+                </>
               )}
 
               {hasPerm("islem:limit_ustu:onay") && (

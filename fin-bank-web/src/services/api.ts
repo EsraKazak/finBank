@@ -142,4 +142,33 @@ export const accountApi = {
   getCustomerAccounts,
 };
 
+//vadeli para çekme işlemi için API çağrısı
+export interface TimeAccountWithdrawPayload {
+  timeAccountId: number;
+  targetType: "DEMAND" | "CASH";
+  demandAccountId?: number;
+  amount: number;
+}
+
+export const withdrawFromTimeAccount = async (
+  payload: TimeAccountWithdrawPayload,
+) => {
+  const response = await api.post("/accounts/time-deposit/withdraw", payload);
+  return response.data;
+};
+
+export interface TimeAccountDepositPayload {
+  targetAccountId: number;
+  sourceType: "DEMAND" | "TIME" | "CASH";
+  sourceAccountId?: number;
+  amount: number;
+}
+
+export const depositToTimeAccount = async (
+  payload: TimeAccountDepositPayload,
+) => {
+  const response = await api.post("/accounts/time-deposit/deposit", payload);
+  return response.data;
+};
+
 export default api;

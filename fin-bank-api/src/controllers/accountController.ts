@@ -320,3 +320,98 @@ export const getAccountByIdHandler = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const withdrawFromTimeAccountHandler = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const {
+      timeAccountId,
+      targetType = "DEMAND",
+      demandAccountId,
+      amount,
+    } = req.body;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
+
+    if (!timeAccountId || amount === undefined || amount === "") {
+      return res.status(400).json({
+        success: false,
+        message: "Vadeli hesap ID ve çekilmek istenen tutar zorunludur.",
+      });
+    }
+
+    if (targetType === "DEMAND" && !demandAccountId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Vadesiz hesaba aktarım için hedef vadesiz hesap seçilmelidir.",
+      });
+    }
+
+    const result = await accountService.withdrawFromTimeAccount({
+      timeAccountId: Number(timeAccountId),
+      targetType,
+      demandAccountId: demandAccountId ? Number(demandAccountId) : undefined, // <-- 0 yerine undefined
+      amount: Number(amount),
+      userId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        targetType === "CASH"
+          ? "Vadeli hesaptan kasaya nakit çekim başarıyla tamamlandı."
+          : "Vadeli hesaptan vadesiz hesaba aktarım başarıyla tamamlandı.",
+      data: result,
+    });
+  } catch (error: any) {
+    return res.status(400).json({
+      success: false,
+      message:
+        error.message || "Vadeli hesaptan para çekilirken bir hata oluştu.",
+    });
+  }
+};
+
+export const depositToTimeAccountHandler = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const { targetAccountId, sourceType, sourceAccountId, amount } = req.body;
+    const userId = (req as any).user?.id || (req as any).user?.userId;
+
+    if (
+      !targetAccountId ||
+      !sourceType ||
+      amount === undefined ||
+      amount === ""
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Hedef hesap ID, kaynak tipi ve tutar alanları zorunludur.",
+      });
+    }
+
+    const result = await accountService.depositToTimeAccount({
+      targetAccountId: Number(targetAccountId),
+      sourceType,
+      sourceAccountId: sourceAccountId ? Number(sourceAccountId) : undefined,
+      amount: Number(amount),
+      userId,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Vadeli hesaba para yatırma işlemi başarıyla tamamlandı.",
+      data: result,
+    });
+  } catch (error: any) {
+    return res.status(400).json({
+      success: false,
+      message:
+        error.message || "Vadeli hesaba para yatırılırken bir hata oluştu.",
+    });
+  }
+};
