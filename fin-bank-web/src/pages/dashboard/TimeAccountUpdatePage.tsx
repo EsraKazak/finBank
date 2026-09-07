@@ -25,11 +25,13 @@ import EditCalendarIcon from "@mui/icons-material/EditCalendar";
 import TrendingUpIcon from "@mui/icons-material/TrendingUp";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import EditIcon from "@mui/icons-material/Edit";
+import TuneIcon from "@mui/icons-material/Tune";
 import api from "../../services/api";
 import type { Customer } from "../../types/customer.types";
 import type { RenewalType } from "../../types/account.types";
 import { CustomerSearchCard } from "../../components/common/CustomerSearchCard";
 import { CustomerAccountSelect } from "../../components/common/CustomerAccountSelect";
+import { UpdateInterestModal } from "../../components/common/UpdateInterestModal";
 import { isNonWorkingDay, getAvailableValors } from "../../utils/dateUtils";
 
 export const TimeAccountUpdatePage: React.FC = () => {
@@ -62,10 +64,13 @@ export const TimeAccountUpdatePage: React.FC = () => {
   // Hata & Bildirim State'leri
   const [hasDateError, setHasDateError] = useState<boolean>(false);
 
-  // Dinamik Faiz Bilgisi
+  // Dinamik Faiz Bilgisi & Özel Faiz State'leri
   const [interestRate, setInterestRate] = useState<string>("");
   const [isLoadingRate, setIsLoadingRate] = useState<boolean>(false);
   const [rateError, setRateError] = useState<string | null>(null);
+  const [isCustomRate, setIsCustomRate] = useState<boolean>(false);
+  const [isInterestModalOpen, setIsInterestModalOpen] =
+    useState<boolean>(false);
 
   // Başarılı Güncelleme Sonrası Kilitleme State'i
   const [isUpdatedSuccess, setIsUpdatedSuccess] = useState<boolean>(false);
@@ -76,10 +81,10 @@ export const TimeAccountUpdatePage: React.FC = () => {
   } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
-  // Vade Günü / Tutara Göre Faiz Oranını Güncelle
+  // Vade Günü / Tutara Göre Faiz Oranını Güncelle (Kullanıcı özel oran girmediyse)
   useEffect(() => {
     const days = Number(maturityDays);
-    if (accountData && days > 0) {
+    if (accountData && days > 0 && !isCustomRate) {
       setIsLoadingRate(true);
       setRateError(null);
 
@@ -104,7 +109,7 @@ export const TimeAccountUpdatePage: React.FC = () => {
         })
         .finally(() => setIsLoadingRate(false));
     }
-  }, [maturityDays, accountData]);
+  }, [maturityDays, accountData, isCustomRate]);
 
   // Vade Başlangıcı Değiştirme (Aynı gün açıldıysa T0 <-> T1 Toggle)
   const toggleStartDate = () => {
@@ -198,13 +203,12 @@ export const TimeAccountUpdatePage: React.FC = () => {
         maturityStart: new Date(startDate),
         maturityEnd: new Date(endDate),
         renewalType,
+        interestRate: Number(interestRate),
         targetAccountId:
           renewalType !== "PRINCIPAL_AND_INTEREST" ? targetAccountId : null,
       });
 
-      // İşlem başarılı: Form alanlarını kilitle
       setIsUpdatedSuccess(true);
-
       setNotification({
         type: "success",
         message: "Vadeli hesap ve temdit koşulları başarıyla güncellendi.",
@@ -226,8 +230,8 @@ export const TimeAccountUpdatePage: React.FC = () => {
           Vadeli Hesap Vade & Temdit Güncelleme
         </Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Mevcut vadeli hesabın vade süresini, temdit tipini ve vade sonu
-          aktarım hesaplarını bu ekrandan değiştirebilirsiniz.
+          Mevcut vadeli hesabın vade süresini, temdit tipini ve faiz oranını bu
+          ekrandan değiştirebilirsiniz.
         </Typography>
 
         {notification && (
@@ -248,6 +252,7 @@ export const TimeAccountUpdatePage: React.FC = () => {
             setSelectedAccountId(null);
             setAccountData(null);
             setIsUpdatedSuccess(false);
+            setIsCustomRate(false);
           }}
         />
 
@@ -276,6 +281,7 @@ export const TimeAccountUpdatePage: React.FC = () => {
                   allowedProductTypes={["TIME"]}
                   onChange={(acc) => {
                     setIsUpdatedSuccess(false);
+                    setIsCustomRate(false);
                     if (acc) {
                       setSelectedAccountId(acc.id);
                       setAccountData(acc);
@@ -320,8 +326,7 @@ export const TimeAccountUpdatePage: React.FC = () => {
                           minimumFractionDigits: 2,
                         })}{" "}
                         {accountData.currency?.code || "TRY"}
-                      </strong>{" "}
-                      (Faiz oranı bu bakiye üzerinden hesaplanır)
+                      </strong>
                     </Alert>
 
                     {/* Vade Gün ve Tarih Alanları */}
@@ -332,7 +337,6 @@ export const TimeAccountUpdatePage: React.FC = () => {
                         gap: 2,
                       }}
                     >
-                      {/* Vade Başlangıç Tarihi */}
                       <Tooltip
                         title={
                           isUpdatedSuccess
@@ -384,20 +388,21 @@ export const TimeAccountUpdatePage: React.FC = () => {
                         />
                       </Tooltip>
 
-                      {/* Vade Süresi (Gün) */}
                       <TextField
                         label="Vade Süresi (Gün)"
                         type="number"
                         disabled={isUpdatedSuccess}
                         value={maturityDays}
-                        onChange={(e) => handleDaysChange(e.target.value)}
+                        onChange={(e) => {
+                          setIsCustomRate(false); // Gün değişirse tablo eşleşmesine dön
+                          handleDaysChange(e.target.value);
+                        }}
                         required
                         size="small"
                         fullWidth
                         slotProps={{ htmlInput: { min: 1, max: 765 } }}
                       />
 
-                      {/* Vade Bitiş Tarihi */}
                       <DatePicker
                         label="Vade Bitiş Tarihi"
                         disabled={isUpdatedSuccess}
@@ -419,6 +424,7 @@ export const TimeAccountUpdatePage: React.FC = () => {
                               moment(startDate, "YYYY-MM-DD"),
                               "days",
                             );
+                            setIsCustomRate(false);
                             setMaturityDays(diff > 0 ? diff : 1);
                           }
                         }}
@@ -433,31 +439,51 @@ export const TimeAccountUpdatePage: React.FC = () => {
                       />
                     </Box>
 
-                    {/* Faiz Oranı & Temdit Seçimi */}
+                    {/* Faiz Oranı, Modal Tetikleme Butonu & Temdit Seçimi */}
                     <Box
                       sx={{
                         display: "grid",
-                        gridTemplateColumns: "1fr 2fr",
+                        gridTemplateColumns: "1.2fr auto 2fr",
+                        alignItems: "flex-start",
                         gap: 2,
                       }}
                     >
                       <TextField
-                        label="Uygulanacak Yeni Faiz Oranı (%)"
+                        label="Uygulanacak Faiz Oranı (%)"
                         value={
                           isLoadingRate
                             ? "Hesaplanıyor..."
                             : interestRate
-                              ? `%${interestRate}`
+                              ? `%${interestRate}${isCustomRate ? " (Özel)" : ""}`
                               : "Oran Yok"
                         }
                         disabled
                         error={Boolean(rateError)}
                         helperText={
-                          rateError || "Tablodan otomatik eşleştirildi."
+                          rateError ||
+                          (isCustomRate
+                            ? "Özel oran manuel olarak tanımlandı."
+                            : "Tablodan otomatik eşleştirildi.")
                         }
                         size="small"
                         fullWidth
                       />
+
+                      <Button
+                        variant="outlined"
+                        color="primary"
+                        startIcon={<TuneIcon />}
+                        disabled={isUpdatedSuccess || !accountData}
+                        onClick={() => setIsInterestModalOpen(true)}
+                        sx={{
+                          height: "40px",
+                          whiteSpace: "nowrap",
+                          textTransform: "none",
+                          fontWeight: 600,
+                        }}
+                      >
+                        Faiz Oranı Güncelle
+                      </Button>
 
                       <FormControl
                         fullWidth
@@ -485,7 +511,7 @@ export const TimeAccountUpdatePage: React.FC = () => {
                       </FormControl>
                     </Box>
 
-                    {/* Temdit Farklı Hesap İse Hedef Hesap Seçimi */}
+                    {/* Hedef Hesap Seçimi */}
                     {renewalType !== "PRINCIPAL_AND_INTEREST" && (
                       <Box>
                         <Typography
@@ -557,7 +583,7 @@ export const TimeAccountUpdatePage: React.FC = () => {
                       </Typography>
                     </Paper>
 
-                    {/* Submit Butonu / Kilidi Açıp Yeniden Düzenleme */}
+                    {/* Submit Butonları */}
                     <Box
                       sx={{
                         display: "flex",
@@ -616,6 +642,19 @@ export const TimeAccountUpdatePage: React.FC = () => {
             </CardContent>
           </Card>
         )}
+
+        {/* Özel Faiz Modal Bileşeni */}
+        <UpdateInterestModal
+          open={isInterestModalOpen}
+          currentRate={Number(interestRate) || 0}
+          onClose={() => setIsInterestModalOpen(false)}
+          onConfirm={(newRate) => {
+            setInterestRate(String(newRate));
+            setIsCustomRate(true);
+            setRateError(null);
+            setIsInterestModalOpen(false);
+          }}
+        />
       </Box>
     </LocalizationProvider>
   );

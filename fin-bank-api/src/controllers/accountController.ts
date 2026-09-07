@@ -259,6 +259,7 @@ export const updateTimeDepositAccountController = async (
       maturityStart,
       maturityEnd,
       renewalType,
+      interestRate,
       targetAccountId,
     } = req.body;
 
@@ -272,6 +273,10 @@ export const updateTimeDepositAccountController = async (
       maturityEnd: maturityEnd ? new Date(maturityEnd) : undefined,
       renewalType,
       targetAccountId: targetAccountId ? Number(targetAccountId) : null,
+      interestRate:
+        interestRate !== undefined && interestRate !== ""
+          ? Number(interestRate)
+          : undefined,
       userId,
     });
 

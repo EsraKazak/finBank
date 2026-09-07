@@ -389,6 +389,7 @@ export const updateTimeAccount = async (data: {
   maturityStart?: Date;
   maturityEnd?: Date;
   renewalType?: RenewalType;
+  interestRate?: number;
   targetAccountId?: number | null;
   userId: string;
 }) => {
@@ -408,11 +409,19 @@ export const updateTimeAccount = async (data: {
     );
   }
 
-  let finalInterestRate = Number(account.interestRate);
   const newMaturityDays = data.maturityDays ?? account.maturityDays;
+  let finalInterestRate = Number(account.interestRate);
 
-  // Vade günü değiştiyse yeni faiz oranını tablodan otomatik bul
-  if (data.maturityDays && data.maturityDays !== account.maturityDays) {
+  // 1. İstekten özel bir faiz oranı geldiyse öncelik ver
+  if (data.interestRate !== undefined && data.interestRate !== null) {
+    const customRate = Number(data.interestRate);
+    if (isNaN(customRate) || customRate < 0 || customRate > 100) {
+      throw new Error("Geçerli bir faiz oranı giriniz (0 - 100 arası).");
+    }
+    finalInterestRate = customRate;
+  }
+  // 2. Özel faiz gönderilmediyse ve vade günü değiştiyse tablodan otomatik bul
+  else if (data.maturityDays && data.maturityDays !== account.maturityDays) {
     const rateRecord = await accountRepository.findMatchingInterestRate(
       account.currencyId,
       newMaturityDays!,
