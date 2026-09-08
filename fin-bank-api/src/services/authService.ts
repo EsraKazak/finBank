@@ -134,6 +134,9 @@ class AuthService {
         "EX",
         86400,
       );
+      console.log(
+        `[AUTH] Redis'e token yazıldı: reset_token:${setupToken} -> ${newUser.username}`,
+      );
 
       const fullName = `${newUser.name} ${newUser.surname}`;
       await MailService.sendInvitationEmail(
@@ -143,12 +146,13 @@ class AuthService {
         setupToken,
       );
 
-      // Beyaz liste durumunu tamamlandı olarak işaretle
       await userRepository.markAuthorizedAsCompleted(userData.email);
     } catch (mailError: any) {
-      await userRepository.deleteUser(newUser.id).catch(() => {});
-      await redis.del(`reset_token:${setupToken}`).catch(() => {});
-      throw new Error("E-posta gönderimi başarısız oldu.");
+      console.error("[AUTH REGİSTER HATASI]:", mailError); // mail ve kayıtta hata varsa loga basıyoruz
+      // Hatanın ne olduğunu görene kadar bu silme işlemlerini geçici olarak yoruma al:
+      // await userRepository.deleteUser(newUser.id).catch(() => {});
+      // await redis.del(`reset_token:${setupToken}`).catch(() => {});
+      throw new Error(`Kayıt sonrası işlem hatası: ${mailError.message}`);
     }
 
     return {
@@ -318,7 +322,11 @@ class AuthService {
     }
 
     const cleanToken = token.trim();
+    console.log(
+      `[AUTH] Şifre sıfırlama deneniyor, aranan key: reset_token:${cleanToken}`,
+    );
     const username = await redis.get(`reset_token:${cleanToken}`);
+    console.log(`[AUTH] Redis'ten dönen kullanıcı adı:`, username);
 
     if (!username) {
       throw new Error("Bağlantının süresi dolmuş veya geçersiz.");
@@ -333,6 +341,7 @@ class AuthService {
     await userRepository.updatePassword(username, hashedPassword);
 
     await redis.del(`reset_token:${cleanToken}`);
+    console.log(`[AUTH] Şifre başarıyla güncellendi: ${username}`);
   }
 
   async getAuthorizedPersonnelList() {

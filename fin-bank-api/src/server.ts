@@ -8,6 +8,7 @@ import prisma from "./config/prisma";
 import customerRoutes from "./routes/customerRoutes";
 import accountRoutes from "./routes/accountRoutes";
 import accountingRoutes from "./routes/accountingRoutes";
+import marketRoutes from "./routes/marketRoutes";
 
 dotenv.config();
 
@@ -44,6 +45,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/accounting", accountingRoutes);
+app.use("/api/market", marketRoutes);
 
 const PORT = process.env.PORT || 5000;
 

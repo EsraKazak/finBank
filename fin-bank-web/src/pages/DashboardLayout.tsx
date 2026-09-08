@@ -676,9 +676,7 @@ export const DashboardPage: React.FC = () => {
               )}
 
               {/* VADELİ GİŞE İŞLEMLERİ */}
-              {(hasPerm("para:cekme") ||
-                hasPerm("para:yatirma") ||
-                hasPerm("musteri:goruntule")) && (
+              {(hasPerm("para:cekme") || hasPerm("para:yatirma")) && (
                 <>
                   <Tooltip
                     title={!open ? "Vadeli Gişe İşlemleri" : ""}

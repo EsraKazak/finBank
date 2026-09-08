@@ -95,14 +95,6 @@ export const router = createBrowserRouter([
                 path: "demand-accounts",
                 element: <DemandAccountsPage />,
               },
-              {
-                path: "time-cashier/withdraw",
-                element: <TimeAccountWithdrawPage />,
-              },
-              {
-                path: "time-cashier/deposit",
-                element: <TimeAccountDepositPage />,
-              },
               // Vadeli hesap işlemleri tek çatı altında
               {
                 path: "time-accounts",
@@ -151,6 +143,14 @@ export const router = createBrowserRouter([
                   {
                     path: "transfer",
                     element: <CashierPage />,
+                  },
+                  {
+                    path: "time-cashier/withdraw",
+                    element: <TimeAccountWithdrawPage />,
+                  },
+                  {
+                    path: "time-cashier/deposit",
+                    element: <TimeAccountDepositPage />,
                   },
                 ],
               },
