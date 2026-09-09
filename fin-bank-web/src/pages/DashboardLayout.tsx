@@ -30,7 +30,6 @@ import PersonAddAltOutlinedIcon from "@mui/icons-material/PersonAddAltOutlined";
 import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import PointOfSaleOutlinedIcon from "@mui/icons-material/PointOfSaleOutlined";
-import FactCheckOutlinedIcon from "@mui/icons-material/FactCheckOutlined";
 import LockClockOutlinedIcon from "@mui/icons-material/LockClockOutlined";
 import PolicyOutlinedIcon from "@mui/icons-material/PolicyOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
@@ -817,104 +816,6 @@ export const DashboardPage: React.FC = () => {
                     </Collapse>
                   )}
                 </>
-              )}
-
-              {hasPerm("islem:limit_ustu:onay") && (
-                <Tooltip
-                  title={!open ? "Limit Üstü Onaylar" : ""}
-                  placement="right"
-                >
-                  <ListItem disablePadding sx={{ mb: 0.8 }}>
-                    <ListItemButton
-                      selected={location.pathname.startsWith(
-                        "/dashboard/approvals",
-                      )}
-                      onClick={() => navigate("/dashboard/approvals")}
-                      sx={{
-                        borderRadius: 2,
-                        justifyContent: open ? "initial" : "center",
-                        px: 2,
-                        "&.Mui-selected": {
-                          bgcolor: "#172a45",
-                          color: "#64ffda",
-                        },
-                        "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
-                      }}
-                    >
-                      <ListItemIcon
-                        sx={{
-                          color: location.pathname.startsWith(
-                            "/dashboard/approvals",
-                          )
-                            ? "#64ffda"
-                            : "grey.400",
-                          minWidth: open ? 40 : "auto",
-                          mr: open ? 1 : "auto",
-                        }}
-                      >
-                        <FactCheckOutlinedIcon />
-                      </ListItemIcon>
-                      {open && (
-                        <ListItemText
-                          primary={
-                            <Typography
-                              sx={{ fontSize: "0.88rem", fontWeight: 600 }}
-                            >
-                              Limit Üstü Onaylar
-                            </Typography>
-                          }
-                        />
-                      )}
-                    </ListItemButton>
-                  </ListItem>
-                </Tooltip>
-              )}
-
-              {hasPerm("sube:gun_sonu:kapatma") && (
-                <Tooltip
-                  title={!open ? "Gün Sonu Kapatma" : ""}
-                  placement="right"
-                >
-                  <ListItem disablePadding sx={{ mb: 0.8 }}>
-                    <ListItemButton
-                      selected={location.pathname.startsWith("/dashboard/eod")}
-                      onClick={() => navigate("/dashboard/eod")}
-                      sx={{
-                        borderRadius: 2,
-                        justifyContent: open ? "initial" : "center",
-                        px: 2,
-                        "&.Mui-selected": {
-                          bgcolor: "#172a45",
-                          color: "#64ffda",
-                        },
-                        "&:hover": { bgcolor: "rgba(255,255,255,0.05)" },
-                      }}
-                    >
-                      <ListItemIcon
-                        sx={{
-                          color: location.pathname.startsWith("/dashboard/eod")
-                            ? "#64ffda"
-                            : "grey.400",
-                          minWidth: open ? 40 : "auto",
-                          mr: open ? 1 : "auto",
-                        }}
-                      >
-                        <LockClockOutlinedIcon />
-                      </ListItemIcon>
-                      {open && (
-                        <ListItemText
-                          primary={
-                            <Typography
-                              sx={{ fontSize: "0.88rem", fontWeight: 600 }}
-                            >
-                              Gün Sonu Kapatma
-                            </Typography>
-                          }
-                        />
-                      )}
-                    </ListItemButton>
-                  </ListItem>
-                </Tooltip>
               )}
 
               {hasPerm("denetim:kayit:goruntule") && (

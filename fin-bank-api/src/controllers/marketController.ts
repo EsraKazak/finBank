@@ -25,7 +25,8 @@ export const getCbrtRatesHandler = async (_req: Request, res: Response) => {
     if (!rawApiKey) {
       return res.status(200).json({
         success: true,
-        data: getFallbackData("TCMB EVDS (Demo Modu - API Key Eksik)"),
+        message: "Şu anda verilere ulaşılamıyor.",
+        data: null,
       });
     }
 
@@ -160,21 +161,8 @@ export const getCbrtRatesHandler = async (_req: Request, res: Response) => {
 
     return res.status(200).json({
       success: true,
-      data: getFallbackData("TCMB EVDS (Önbellek/Yedek)"),
+      message: "Şu anda verilere ulaşılamıyor.",
+      data: null,
     });
   }
 };
-
-const getFallbackData = (source: string) => ({
-  policyRate: 37.0,
-  overnightBorrowingRate: 34.0,
-  overnightLendingRate: 40.0,
-  lastDecisionDate: "2026-08-24",
-  trend: "DOWN" as const,
-  currencies: [
-    { code: "USD", name: "Dolar", buying: 34.15, selling: 34.25 },
-    { code: "EUR", name: "Euro", buying: 37.82, selling: 37.95 },
-  ],
-  source,
-  updatedAt: new Date().toISOString(),
-});

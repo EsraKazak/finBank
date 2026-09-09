@@ -2,10 +2,7 @@ export class MailService {
   private static get clientUrl(): string {
     // Render'da NODE_ENV otomatik 'production' olur:
     if (process.env.NODE_ENV === "production") {
-      return (
-        process.env.FRONTEND_URL ||
-        "https://SENIN-CANLI-FRONTEND-LINKIN.onrender.com"
-      );
+      return process.env.FRONTEND_URL || "https://fin-bank-web.onrender.com/";
     }
     // Localde çalışırken:
     return process.env.FRONTEND_URL || "http://localhost:5173";

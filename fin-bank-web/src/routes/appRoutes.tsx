@@ -15,8 +15,6 @@ import { WhitelistPage } from "../pages/dashboard/WhitelistPage";
 import { RolesPage } from "../pages/dashboard/RolesPage";
 import { CustomersPage } from "../pages/dashboard/CustomersPage";
 import { CashierPage } from "../pages/dashboard/CashierPage";
-import { ApprovalsPage } from "../pages/dashboard/ApprovalsPage";
-import { EndOfDayPage } from "../pages/dashboard/EndOfDayPage";
 import { AuditPage } from "../pages/dashboard/AuditPage";
 import { DemandAccountsPage } from "../pages/dashboard/DemandAccountsPage";
 import { TimeAccountOpenPage } from "../pages/dashboard/TimeAccountOpenPage";
@@ -153,28 +151,6 @@ export const router = createBrowserRouter([
                     element: <TimeAccountDepositPage />,
                   },
                 ],
-              },
-            ],
-          },
-
-          // Onay Yetkisi
-          {
-            element: <RoleGuard requiredPermission="islem:limit_ustu:onay" />,
-            children: [
-              {
-                path: "approvals",
-                element: <ApprovalsPage />,
-              },
-            ],
-          },
-
-          // Gün Sonu Mutabakatı
-          {
-            element: <RoleGuard requiredPermission="sube:gun_sonu:kapatma" />,
-            children: [
-              {
-                path: "eod",
-                element: <EndOfDayPage />,
               },
             ],
           },
