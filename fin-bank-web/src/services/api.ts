@@ -1,6 +1,16 @@
 import axios from "axios";
 import type { IAdminUserItem, IRole, IPermission } from "../types/auth.types";
 
+export interface IAuditLogItem {
+  id: string;
+  category: "FINANCIAL" | "CUSTOMER" | "ACCOUNT";
+  action: string;
+  description: string;
+  performedBy: string;
+  branchName?: string;
+  date: string;
+}
+
 const BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 
@@ -123,6 +133,13 @@ export const adminApi = {
   assignRole: async (userId: string, roleId: string) => {
     const response = await api.post("/admin/assign-role", { userId, roleId });
     return response.data;
+  },
+
+  getAuditLogs: async () => {
+    const response = await api.get<{ data: IAuditLogItem[] }>(
+      "/admin/audit-logs",
+    );
+    return response.data.data;
   },
 };
 

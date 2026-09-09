@@ -19,5 +19,6 @@ router.get("/roles", adminController.getRolesAndPermissions);
 
 router.post("/assign-role", adminController.assignRole);
 router.post("/assign-permissions", adminController.assignExtraPermissions);
+router.get("/audit-logs", adminController.getAuditLogs);
 
 export default router;

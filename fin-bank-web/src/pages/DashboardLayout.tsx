@@ -30,7 +30,6 @@ import PersonAddAltOutlinedIcon from "@mui/icons-material/PersonAddAltOutlined";
 import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
 import PeopleAltOutlinedIcon from "@mui/icons-material/PeopleAltOutlined";
 import PointOfSaleOutlinedIcon from "@mui/icons-material/PointOfSaleOutlined";
-import LockClockOutlinedIcon from "@mui/icons-material/LockClockOutlined";
 import PolicyOutlinedIcon from "@mui/icons-material/PolicyOutlined";
 import LogoutIcon from "@mui/icons-material/Logout";
 import NotificationsNoneOutlinedIcon from "@mui/icons-material/NotificationsNoneOutlined";
@@ -328,7 +327,6 @@ export const DashboardPage: React.FC = () => {
           {(hasPerm("musteri:goruntule") ||
             hasPerm("para:yatirma") ||
             hasPerm("islem:limit_ustu:onay") ||
-            hasPerm("sube:gun_sonu:kapatma") ||
             hasPerm("denetim:kayit:goruntule")) && (
             <>
               {open && (

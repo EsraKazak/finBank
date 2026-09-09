@@ -52,6 +52,15 @@ class AdminController {
       return res.status(400).json({ message: error.message });
     }
   }
+  async getAuditLogs(req: Request, res: Response) {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 100;
+      const logs = await adminService.getAuditLogs(limit);
+      return res.status(200).json({ data: logs });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message });
+    }
+  }
 }
 
 export default new AdminController();
