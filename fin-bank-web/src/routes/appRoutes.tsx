@@ -142,15 +142,26 @@ export const router = createBrowserRouter([
                     path: "transfer",
                     element: <CashierPage />,
                   },
-                  {
-                    path: "time-cashier/withdraw",
-                    element: <TimeAccountWithdrawPage />,
-                  },
-                  {
-                    path: "time-cashier/deposit",
-                    element: <TimeAccountDepositPage />,
-                  },
                 ],
+              },
+            ],
+          },
+
+          // 2. Vadeli Gişe İşlemleri (Sidebar linkleriyle birebir uyumlu)
+          {
+            path: "time-cashier",
+            children: [
+              {
+                index: true,
+                element: <Navigate to="withdraw" replace />,
+              },
+              {
+                path: "withdraw",
+                element: <TimeAccountWithdrawPage />,
+              },
+              {
+                path: "deposit",
+                element: <TimeAccountDepositPage />,
               },
             ],
           },
