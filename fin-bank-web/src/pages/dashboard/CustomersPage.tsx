@@ -47,6 +47,16 @@ export const CustomersPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [searchTerm, setSearchTerm] = useState<string>("");
 
+  const userPermissions: string[] = user?.permissions || [];
+  const userRoles: string[] = Array.isArray(user?.role)
+    ? (user.role as string[])
+    : typeof user?.role === "string"
+      ? [user.role]
+      : [];
+
+  const canManageCustomers =
+    userPermissions.includes("musteri:yonet") || userRoles.includes("YONETICI");
+
   // Sayfalama State'leri
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(10);
@@ -299,19 +309,21 @@ export const CustomersPage: React.FC = () => {
             yeni müşteri kaydedebilirsiniz.
           </Typography>
         </div>
-        <Button
-          variant="contained"
-          startIcon={<PersonAddIcon />}
-          onClick={handleOpenCustomerModal}
-          sx={{
-            borderRadius: 2,
-            px: 3,
-            textTransform: "none",
-            fontWeight: 600,
-          }}
-        >
-          Yeni Müşteri Ekle
-        </Button>
+        {canManageCustomers && (
+          <Button
+            variant="contained"
+            startIcon={<PersonAddIcon />}
+            onClick={handleOpenCustomerModal}
+            sx={{
+              borderRadius: 2,
+              px: 3,
+              textTransform: "none",
+              fontWeight: 600,
+            }}
+          >
+            Yeni Müşteri Ekle
+          </Button>
+        )}
       </Box>
 
       {successMessage && (
